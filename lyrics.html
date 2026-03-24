@@ -1,0 +1,760 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mere Nishan - Lyrics</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --ink: #f5f7ff;
+      --soft: #b8bfd6;
+      --accent: #79d7ff;
+      --bg: #000000;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+      color: var(--ink);
+      font-family: "Poppins", "Segoe UI", Tahoma, sans-serif;
+      background: var(--bg);
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(900px 520px at 50% -10%, rgba(121, 215, 255, 0.22), transparent 62%),
+        radial-gradient(760px 500px at 85% 120%, rgba(167, 130, 255, 0.2), transparent 70%);
+      opacity: 0.8;
+      z-index: -1;
+    }
+
+    .shell {
+      width: min(860px, 96vw);
+      margin: clamp(20px, 5vw, 40px) auto;
+      padding: clamp(16px, 4vw, 26px) clamp(14px, 3vw, 22px) clamp(22px, 5vw, 38px);
+      position: relative;
+      z-index: 2;
+      animation: shellIn 900ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+      display: none;
+    }
+
+    #soundRain {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.85;
+    }
+
+    #song {
+      position: fixed;
+      width: 0;
+      height: 0;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .love-shower {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 3;
+      overflow: hidden;
+    }
+
+    .love-chip {
+      position: absolute;
+      top: -16vh;
+      left: 50%;
+      font-family: "Cormorant Garamond", Georgia, serif;
+      font-weight: 700;
+      white-space: nowrap;
+      user-select: none;
+      filter: drop-shadow(0 0 10px rgba(255, 125, 194, 0.4));
+      animation-timing-function: linear;
+      animation-fill-mode: forwards;
+      will-change: transform, opacity;
+    }
+
+    .love-chip.anim-fall {
+      animation-name: loveFall;
+    }
+
+    .love-chip.anim-sway {
+      animation-name: loveSway;
+    }
+
+    .love-chip.anim-spiral {
+      animation-name: loveSpiral;
+    }
+
+    .love-chip.anim-pop {
+      animation-name: lovePopFall;
+    }
+
+    .tap-hint {
+      position: fixed;
+      left: 50%;
+      bottom: calc(18px + env(safe-area-inset-bottom));
+      transform: translateX(-50%) translateY(10px);
+      width: min(92vw, 380px);
+      padding: 10px 14px;
+      text-align: center;
+      font-family: "Poppins", "Segoe UI", Tahoma, sans-serif;
+      font-size: 0.95rem;
+      letter-spacing: 0.2px;
+      color: #f5f7ff;
+      background: rgba(22, 25, 42, 0.58);
+      border: 1px solid rgba(121, 215, 255, 0.48);
+      border-radius: 999px;
+      box-shadow: 0 8px 26px rgba(0, 0, 0, 0.34);
+      backdrop-filter: blur(8px);
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 240ms ease, transform 240ms ease, visibility 0s linear 240ms;
+      z-index: 6;
+      pointer-events: none;
+    }
+
+    .tap-hint.show {
+      opacity: 1;
+      visibility: visible;
+      transform: translateX(-50%) translateY(0);
+      transition: opacity 240ms ease, transform 240ms ease, visibility 0s;
+      animation: hintPulse 1.25s ease-in-out infinite;
+    }
+
+    .shell::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(121, 215, 255, 0.72), transparent);
+      pointer-events: none;
+    }
+
+    .title {
+      margin: 0;
+      text-align: center;
+      font-family: "Cormorant Garamond", Georgia, serif;
+      font-size: clamp(2rem, 7vw, 3.4rem);
+      font-weight: 700;
+      letter-spacing: 0.6px;
+      text-shadow: 0 0 24px rgba(121, 215, 255, 0.36);
+    }
+
+    .player {
+      margin: 14px auto 14px;
+      width: min(500px, 100%);
+      display: block;
+      accent-color: var(--accent);
+    }
+
+    .lyrics-box {
+      margin-top: 18px;
+      padding: 0;
+    }
+
+    .line {
+      margin: 0;
+      padding: 7px 10px;
+      font-family: "Cormorant Garamond", Georgia, serif;
+      font-size: clamp(1.2rem, 4.6vw, 1.95rem);
+      line-height: 1.35;
+      color: rgba(235, 240, 255, 0.62);
+      transform: translate3d(0, 0, 0);
+      border-left: 2px solid transparent;
+      transition: border-color 180ms ease, color 180ms ease, transform 180ms ease, opacity 180ms ease;
+    }
+
+    .line + .line {
+      margin-top: 6px;
+    }
+
+    .line.active {
+      color: #ffffff;
+      border-left-color: var(--accent);
+      transform: translateX(5px) scale(1.008);
+      text-shadow: 0 0 16px rgba(121, 215, 255, 0.5);
+    }
+
+    .line.just-activated {
+      animation: linePop 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+
+    @keyframes shellIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes linePop {
+      from {
+        transform: translateX(0) scale(0.99);
+        filter: brightness(0.95);
+      }
+      to {
+        transform: translateX(5px) scale(1.01);
+        filter: brightness(1);
+      }
+    }
+
+    @keyframes loveFall {
+      0% {
+        transform: translate3d(0, -6vh, 0) rotate(-4deg) scale(0.9);
+        opacity: 0;
+      }
+      15% {
+        opacity: 1;
+      }
+      100% {
+        transform: translate3d(var(--dx, 0px), 112vh, 0) rotate(12deg) scale(1.08);
+        opacity: 0;
+      }
+    }
+
+    @keyframes loveSway {
+      0% {
+        transform: translate3d(0, -8vh, 0) rotate(0deg) scale(0.92);
+        opacity: 0;
+      }
+      15% {
+        opacity: 1;
+      }
+      35% {
+        transform: translate3d(calc(var(--dx, 0px) * 0.4), 24vh, 0) rotate(-12deg) scale(1);
+      }
+      65% {
+        transform: translate3d(calc(var(--dx, 0px) * -0.55), 62vh, 0) rotate(10deg) scale(1.08);
+      }
+      100% {
+        transform: translate3d(var(--dx, 0px), 112vh, 0) rotate(-16deg) scale(1.02);
+        opacity: 0;
+      }
+    }
+
+    @keyframes loveSpiral {
+      0% {
+        transform: translate3d(0, -8vh, 0) rotate(0deg) scale(0.85);
+        opacity: 0;
+      }
+      12% {
+        opacity: 1;
+      }
+      50% {
+        transform: translate3d(calc(var(--dx, 0px) * 0.35), 52vh, 0) rotate(360deg) scale(1.1);
+      }
+      100% {
+        transform: translate3d(var(--dx, 0px), 112vh, 0) rotate(760deg) scale(1);
+        opacity: 0;
+      }
+    }
+
+    @keyframes lovePopFall {
+      0% {
+        transform: translate3d(0, -8vh, 0) scale(0.6);
+        opacity: 0;
+      }
+      18% {
+        transform: translate3d(calc(var(--dx, 0px) * 0.25), 10vh, 0) scale(1.2);
+        opacity: 1;
+      }
+      35% {
+        transform: translate3d(calc(var(--dx, 0px) * -0.2), 26vh, 0) scale(0.95);
+      }
+      100% {
+        transform: translate3d(var(--dx, 0px), 112vh, 0) scale(1.05);
+        opacity: 0;
+      }
+    }
+
+    @keyframes hintPulse {
+      0%,
+      100% {
+        box-shadow: 0 8px 26px rgba(0, 0, 0, 0.34);
+      }
+      50% {
+        box-shadow: 0 10px 32px rgba(60, 120, 255, 0.3);
+      }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="soundRain" aria-hidden="true"></canvas>
+  <div id="loveShower" class="love-shower" aria-hidden="true"></div>
+  <audio id="song" src="Mere Nishan✨.mp3" autoplay loop preload="auto"></audio>
+  <div id="tapHint" class="tap-hint" aria-live="polite">Tap anywhere to play music</div>
+
+  <main class="shell">
+    <h1 class="title">Mere Nishan</h1>
+
+    <section class="lyrics-box" aria-live="polite">
+      <p class="line" id="line0">[Line 1]</p>
+      <p class="line" id="line1">[Line 2]</p>
+      <p class="line" id="line2">[Line 3]</p>
+      <p class="line" id="line3">[Line 4]</p>
+    </section>
+  </main>
+
+  <script>
+    const LYRIC_LINES = [
+      "Wooaaoooo Wooaaooo",
+      "Naaee Naaeera Naaraa",
+      "NaaaraNaaae",
+      "nara nara naara naa nee",
+      "Jhuki Teri Palko Mein",
+      "Mil Jaaye Mujhe Panah",
+      "Palke Ghire Aansu Bhari",
+      "Reh Jaaye Mere Nishan",
+      "Tute Dil Ki Mat Kar",
+      "Tu Fikar Mere Hamnawa",
+      "Pyaar Du Tujhko Is Kadar reh jaaye mere",
+      "nishaan Mere Nishaan.Mere Nishaan",
+      "Mere Nishaan.Mere Nishaan",
+      "Mere Nishaan.Mere Nishaan",
+      "Mere Nishaan.Mere Nishaan",
+      "Mere Nishaan.aan.aaa",
+      "Khak me mil jaau me",
+      "Jeise ke ek lamha",
+      "Aa lag ja seene se",
+      "Ban ja mera rehnumaa",
+      "Dekhta hu sapne tere,",
+      "sun le meri jaan-e-jaan",
+      "Khwaab ye sach ho jaae,",
+      "agar khuda ho meherbaan",
+      "Mere Nishaan",
+      "Mere Nishaan.Mere Nishaan.",
+      "Mere Nishaan.Mere Nishaan.",
+      "Mere Nishaan.Mere Nishaan.",
+      "Mere Nishaan.haaannn",
+      "Mere Nishaan.aaan...aaann",
+      "Mere Nishaan.Mere Nishaan.",
+      "Mere Nishaan.Nishaan Nishaan Nishaan",
+      "Mere Nishaan.Nishaan Nishaan Nishaan",
+      "Mere Nishaan.",
+      "Naaee Naaeera Naaraa",
+      "NaaaraNaaae",
+      "nara nara naara naa nee",
+      "Sajde. me. tere sarr jhukta bass",
+      "Chahat ki hai ye daastaan.",
+      "Rooth gya mera rab. jo mujhse.",
+      "Toh mita de wo Mere Nishaan'.",
+      "Mere Nishaan.Mere Nishaan",
+      "Mere Nishaan.Mere Nishaan",
+      "Mere Nishaan.Mere Nishaan",
+      "Mere Nishaan.Mere Nishaan",
+      "Mere Nishaan.aan.aaa",
+    ];
+
+    const SYNC_STORAGE_KEY = "mereNishanLyricsSyncV1";
+    let LYRICS = [];
+
+    const songEl = document.getElementById("song");
+    const rainCanvas = document.getElementById("soundRain");
+    const rainCtx = rainCanvas.getContext("2d");
+    const tapHintEl = document.getElementById("tapHint");
+    const lineEls = [
+      document.getElementById("line0"),
+      document.getElementById("line1"),
+      document.getElementById("line2"),
+      document.getElementById("line3"),
+    ];
+
+    let autoplayBlocked = false;
+
+    let currentGroupStart = -4;
+    let rafId = 0;
+    let previousActiveIndex = -1;
+    let rainAudioCtx = null;
+    let rainAnalyser = null;
+    let rainFreqData = null;
+    let rainDrops = [];
+    let loveTimer = 0;
+
+    const loveShowerEl = document.getElementById("loveShower");
+    const loveTexts = [
+      "I love you",
+      "Love you",
+      "My love",
+      "I love you so much",
+      "Forever yours",
+      "Only you",
+      "Cute love",
+    ];
+    const loveEmojis = ["💖", "💕", "💘", "💗", "💓", "🥰", "😘", "😍", "🫶", "✨"];
+    const loveAnimations = ["anim-fall", "anim-sway", "anim-spiral", "anim-pop"];
+
+    function randomBetween(min, max) {
+      return Math.random() * (max - min) + min;
+    }
+
+    function spawnLoveChip() {
+      if (!loveShowerEl) return;
+
+      if (loveShowerEl.childElementCount > 42) {
+        loveShowerEl.firstElementChild?.remove();
+      }
+
+      const chip = document.createElement("span");
+      const text = loveTexts[Math.floor(Math.random() * loveTexts.length)];
+      const emoji = loveEmojis[Math.floor(Math.random() * loveEmojis.length)];
+      const sideEmoji = loveEmojis[Math.floor(Math.random() * loveEmojis.length)];
+      const animationClass = loveAnimations[Math.floor(Math.random() * loveAnimations.length)];
+
+      chip.className = "love-chip " + animationClass;
+      chip.textContent = text + " " + emoji + " " + sideEmoji;
+      chip.style.left = randomBetween(3, 95) + "%";
+      chip.style.setProperty("--dx", randomBetween(-120, 120).toFixed(1) + "px");
+      chip.style.animationDuration = randomBetween(5.4, 10.8).toFixed(2) + "s";
+      chip.style.fontSize = randomBetween(18, 34).toFixed(1) + "px";
+      chip.style.opacity = randomBetween(0.7, 1).toFixed(2);
+      chip.style.color = ["#ffd7ef", "#f9d5ff", "#ffffff", "#ffc2de", "#ffe2f2"][Math.floor(Math.random() * 5)];
+
+      loveShowerEl.appendChild(chip);
+      setTimeout(() => chip.remove(), 12000);
+    }
+
+    function startLoveShower() {
+      if (loveTimer || !loveShowerEl) return;
+
+      for (let i = 0; i < 14; i++) {
+        setTimeout(spawnLoveChip, i * 140);
+      }
+
+      loveTimer = window.setInterval(() => {
+        const burstCount = Math.random() < 0.35 ? 2 : 1;
+        for (let i = 0; i < burstCount; i++) spawnLoveChip();
+      }, 330);
+    }
+
+    function setTapHintVisible(show) {
+      if (!tapHintEl) return;
+      tapHintEl.classList.toggle("show", Boolean(show));
+    }
+
+    function resizeRainCanvas() {
+      const ratio = Math.max(1, window.devicePixelRatio || 1);
+      const width = Math.floor(window.innerWidth * ratio);
+      const height = Math.floor(window.innerHeight * ratio);
+      if (rainCanvas.width !== width || rainCanvas.height !== height) {
+        rainCanvas.width = width;
+        rainCanvas.height = height;
+      }
+      rainCtx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    }
+
+    function createRainDrop() {
+      const width = window.innerWidth || 1;
+      const height = window.innerHeight || 1;
+      return {
+        x: Math.random() * width,
+        y: Math.random() * height,
+        speed: 1 + Math.random() * 2,
+        length: 14 + Math.random() * 30,
+        alpha: 0.18 + Math.random() * 0.38,
+        sway: (Math.random() - 0.5) * 0.2,
+      };
+    }
+
+    function seedRainDrops() {
+      const count = Math.max(55, Math.floor((window.innerWidth || 360) / 9));
+      rainDrops = Array.from({ length: count }, createRainDrop);
+    }
+
+    function setupSoundRain() {
+      if (rainAudioCtx || !(window.AudioContext || window.webkitAudioContext)) return;
+
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      rainAudioCtx = new AudioCtx();
+      rainAnalyser = rainAudioCtx.createAnalyser();
+      rainAnalyser.fftSize = 256;
+      rainAnalyser.smoothingTimeConstant = 0.82;
+      rainFreqData = new Uint8Array(rainAnalyser.frequencyBinCount);
+
+      const source = rainAudioCtx.createMediaElementSource(songEl);
+      source.connect(rainAnalyser);
+      rainAnalyser.connect(rainAudioCtx.destination);
+    }
+
+    function resumeSoundRain() {
+      if (!rainAudioCtx) setupSoundRain();
+      if (rainAudioCtx && rainAudioCtx.state === "suspended") {
+        rainAudioCtx.resume().catch(() => {});
+      }
+    }
+
+    function getSoundEnergy() {
+      if (!rainAnalyser || !rainFreqData) return 0;
+      rainAnalyser.getByteFrequencyData(rainFreqData);
+
+      let sum = 0;
+      const sampleCount = Math.min(72, rainFreqData.length);
+      for (let i = 0; i < sampleCount; i++) {
+        sum += rainFreqData[i];
+      }
+      return (sum / sampleCount) / 255;
+    }
+
+    function paintSoundRain() {
+      resizeRainCanvas();
+
+      const width = window.innerWidth || 1;
+      const height = window.innerHeight || 1;
+      const isPlaying = !songEl.paused && !songEl.ended;
+      const energy = isPlaying ? getSoundEnergy() : 0;
+
+      rainCtx.fillStyle = "rgba(0, 0, 0, 0.22)";
+      rainCtx.fillRect(0, 0, width, height);
+
+      const speedBoost = 0.7 + energy * 1;
+      const glowBoost = 0.16 + energy * 0.62;
+
+      for (let i = 0; i < rainDrops.length; i++) {
+        const d = rainDrops[i];
+        d.y += d.speed * speedBoost;
+        d.x += d.sway;
+
+        if (d.y > height + d.length || d.x < -20 || d.x > width + 20) {
+          rainDrops[i] = {
+            ...createRainDrop(),
+            y: -20 - Math.random() * 80,
+          };
+          continue;
+        }
+
+        const gradient = rainCtx.createLinearGradient(d.x, d.y, d.x, d.y + d.length * speedBoost);
+        gradient.addColorStop(0, "rgba(121, 215, 255, 0)");
+        gradient.addColorStop(1, "rgba(121, 215, 255, " + Math.min(0.88, d.alpha + glowBoost) + ")");
+
+        rainCtx.strokeStyle = gradient;
+        rainCtx.lineWidth = 1 + energy * 1.8;
+        rainCtx.beginPath();
+        rainCtx.moveTo(d.x, d.y);
+        rainCtx.lineTo(d.x, d.y + d.length * speedBoost);
+        rainCtx.stroke();
+      }
+    }
+
+    function buildAutoTimeline(durationSeconds) {
+      const safeDuration = Number.isFinite(durationSeconds) && durationSeconds > 0 ? durationSeconds : 240;
+
+      const weights = LYRIC_LINES.map((line) => {
+        const clean = line.replace(/[^a-zA-Z0-9 ]/g, " ").trim();
+        return Math.max(8, clean.length);
+      });
+
+      const totalWeight = weights.reduce((sum, w) => sum + w, 0);
+      let elapsed = 0;
+
+      return LYRIC_LINES.map((text, idx) => {
+        const start = (elapsed / totalWeight) * Math.max(1, safeDuration - 1.2);
+        elapsed += weights[idx];
+        return { start, text };
+      });
+    }
+
+    function readSavedTimeline() {
+      try {
+        const raw = localStorage.getItem(SYNC_STORAGE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed) || parsed.length !== LYRIC_LINES.length) return null;
+
+        for (let i = 0; i < parsed.length; i++) {
+          if (!Number.isFinite(parsed[i]) || parsed[i] < 0) return null;
+        }
+
+        return parsed;
+      } catch {
+        return null;
+      }
+    }
+
+    function applyTimeline(startTimes) {
+      LYRICS = LYRIC_LINES.map((text, idx) => ({
+        start: Math.max(0, startTimes[idx] || 0),
+        text,
+      }));
+    }
+
+    function initializeTimeline() {
+      const saved = readSavedTimeline();
+      if (saved) {
+        applyTimeline(saved);
+        return;
+      }
+
+      const auto = buildAutoTimeline(songEl.duration);
+      applyTimeline(auto.map((x) => x.start));
+    }
+
+    function getActiveIndex(time) {
+      if (!LYRICS.length) return 0;
+
+      let low = 0;
+      let high = LYRICS.length - 1;
+      let best = 0;
+
+      while (low <= high) {
+        const mid = (low + high) >> 1;
+        if (time >= LYRICS[mid].start) {
+          best = mid;
+          low = mid + 1;
+        } else {
+          high = mid - 1;
+        }
+      }
+
+      return best;
+    }
+
+    function renderGroup(activeIndex) {
+      const groupStart = Math.floor(activeIndex / 4) * 4;
+      if (groupStart !== currentGroupStart) {
+        currentGroupStart = groupStart;
+
+        for (let i = 0; i < 4; i++) {
+          const lyric = LYRICS[groupStart + i];
+          lineEls[i].textContent = lyric ? lyric.text : "";
+          lineEls[i].classList.remove("active");
+        }
+      }
+
+      const activeInGroup = activeIndex - currentGroupStart;
+      lineEls.forEach((el, idx) => {
+        const isActive = idx === activeInGroup;
+        const becameActive = isActive && previousActiveIndex !== activeIndex;
+        el.classList.toggle("active", isActive);
+        el.classList.toggle("just-activated", becameActive);
+      });
+
+      previousActiveIndex = activeIndex;
+    }
+
+    function updateLyrics() {
+      const syncedTime = Math.max(0, songEl.currentTime);
+      const activeIndex = getActiveIndex(syncedTime);
+      renderGroup(activeIndex);
+    }
+
+    function stopRealtimeLoop() {
+      if (!rafId) return;
+      cancelAnimationFrame(rafId);
+      rafId = 0;
+    }
+
+    function runRealtimeLoop() {
+      updateLyrics();
+      paintSoundRain();
+      rafId = requestAnimationFrame(runRealtimeLoop);
+    }
+
+    function startRealtimeLoop() {
+      if (rafId) return;
+      rafId = requestAnimationFrame(runRealtimeLoop);
+    }
+
+    function attemptAutoplay() {
+      setTapHintVisible(false);
+      const playPromise = songEl.play();
+      if (!playPromise || typeof playPromise.catch !== "function") {
+        autoplayBlocked = false;
+        setTapHintVisible(songEl.paused);
+        return;
+      }
+
+      playPromise
+        .then(() => {
+          autoplayBlocked = false;
+          setTapHintVisible(false);
+          resumeSoundRain();
+          startRealtimeLoop();
+        })
+        .catch(() => {
+          autoplayBlocked = true;
+          setTapHintVisible(true);
+        });
+    }
+
+    songEl.addEventListener("loadedmetadata", () => {
+      initializeTimeline();
+      updateLyrics();
+      paintSoundRain();
+      attemptAutoplay();
+    });
+    songEl.addEventListener("play", () => {
+      setTapHintVisible(false);
+      resumeSoundRain();
+      startRealtimeLoop();
+    });
+    songEl.addEventListener("pause", () => {
+      setTapHintVisible(true);
+      updateLyrics();
+      paintSoundRain();
+    });
+
+    songEl.addEventListener("ended", () => {
+      setTapHintVisible(true);
+      updateLyrics();
+      paintSoundRain();
+    });
+
+    songEl.addEventListener("seeking", () => updateLyrics());
+    songEl.addEventListener("seeked", () => updateLyrics());
+
+    function tryUnlockAutoplay() {
+      if (!autoplayBlocked || !songEl.paused) return;
+      setTapHintVisible(false);
+      resumeSoundRain();
+      attemptAutoplay();
+    }
+
+    document.addEventListener("pointerdown", tryUnlockAutoplay, { passive: true });
+    document.addEventListener("keydown", tryUnlockAutoplay);
+
+    window.addEventListener("resize", () => {
+      resizeRainCanvas();
+      seedRainDrops();
+      paintSoundRain();
+    });
+
+    document.addEventListener("animationend", (event) => {
+      if (event.target && event.target.classList && event.target.classList.contains("line")) {
+        event.target.classList.remove("just-activated");
+      }
+    });
+
+    initializeTimeline();
+    resizeRainCanvas();
+    seedRainDrops();
+    updateLyrics();
+    paintSoundRain();
+    startLoveShower();
+    startRealtimeLoop();
+    setTapHintVisible(songEl.paused);
+    attemptAutoplay();
+  </script>
+</body>
+</html>

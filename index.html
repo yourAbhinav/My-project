@@ -128,6 +128,9 @@
       letter-spacing: 0.3px;
       text-shadow: 0 0 12px rgba(255, 255, 255, 0.45), 0 0 36px rgba(255, 84, 153, 0.55);
       margin: 0;
+    }
+
+    .screen.active .script-title {
       animation: glowPulse 2.8s ease-in-out infinite alternate;
     }
 
@@ -291,11 +294,11 @@
       font-size: clamp(1.05rem, 3.4vw, 1.36rem);
     }
 
-    .question-screen .btn-yes {
+    .question-screen.active .btn-yes {
       animation: yesPulse 1.8s ease-in-out infinite;
     }
 
-    .question-screen .btn-no {
+    .question-screen.active .btn-no {
       animation: noWiggle 1.2s ease-in-out infinite;
     }
 

@@ -384,6 +384,17 @@
 
     let autoplayBlocked = false;
 
+    const LOW_END_PROFILE = (() => {
+      try {
+        const prefersReduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        const cores = navigator.hardwareConcurrency || 4;
+        const memory = navigator.deviceMemory || 4;
+        return prefersReduced || cores <= 4 || memory <= 4;
+      } catch {
+        return false;
+      }
+    })();
+
     let currentGroupStart = -4;
     let rafId = 0;
     let previousActiveIndex = -1;
@@ -392,6 +403,8 @@
     let rainFreqData = null;
     let rainDrops = [];
     let loveTimer = 0;
+    let lastFrameTime = 0;
+    const TARGET_FRAME_MS = LOW_END_PROFILE ? 33 : 16;
 
     const loveShowerEl = document.getElementById("loveShower");
     const loveTexts = [
@@ -439,14 +452,14 @@
     function startLoveShower() {
       if (loveTimer || !loveShowerEl) return;
 
-      for (let i = 0; i < 14; i++) {
+      for (let i = 0; i < (LOW_END_PROFILE ? 7 : 14); i++) {
         setTimeout(spawnLoveChip, i * 140);
       }
 
       loveTimer = window.setInterval(() => {
-        const burstCount = Math.random() < 0.35 ? 2 : 1;
+        const burstCount = LOW_END_PROFILE ? 1 : (Math.random() < 0.35 ? 2 : 1);
         for (let i = 0; i < burstCount; i++) spawnLoveChip();
-      }, 330);
+      }, LOW_END_PROFILE ? 640 : 330);
     }
 
     function setTapHintVisible(show) {
@@ -455,7 +468,8 @@
     }
 
     function resizeRainCanvas() {
-      const ratio = Math.max(1, window.devicePixelRatio || 1);
+      const dprCap = LOW_END_PROFILE ? 1.1 : 1.7;
+      const ratio = Math.max(1, Math.min(window.devicePixelRatio || 1, dprCap));
       const width = Math.floor(window.innerWidth * ratio);
       const height = Math.floor(window.innerHeight * ratio);
       if (rainCanvas.width !== width || rainCanvas.height !== height) {
@@ -479,7 +493,9 @@
     }
 
     function seedRainDrops() {
-      const count = Math.max(55, Math.floor((window.innerWidth || 360) / 9));
+      const divisor = LOW_END_PROFILE ? 15 : 9;
+      const minDrops = LOW_END_PROFILE ? 24 : 55;
+      const count = Math.max(minDrops, Math.floor((window.innerWidth || 360) / divisor));
       rainDrops = Array.from({ length: count }, createRainDrop);
     }
 
@@ -544,11 +560,14 @@
           continue;
         }
 
-        const gradient = rainCtx.createLinearGradient(d.x, d.y, d.x, d.y + d.length * speedBoost);
-        gradient.addColorStop(0, "rgba(121, 215, 255, 0)");
-        gradient.addColorStop(1, "rgba(121, 215, 255, " + Math.min(0.88, d.alpha + glowBoost) + ")");
-
-        rainCtx.strokeStyle = gradient;
+        if (LOW_END_PROFILE) {
+          rainCtx.strokeStyle = "rgba(121, 215, 255, " + Math.min(0.72, d.alpha + glowBoost * 0.6) + ")";
+        } else {
+          const gradient = rainCtx.createLinearGradient(d.x, d.y, d.x, d.y + d.length * speedBoost);
+          gradient.addColorStop(0, "rgba(121, 215, 255, 0)");
+          gradient.addColorStop(1, "rgba(121, 215, 255, " + Math.min(0.88, d.alpha + glowBoost) + ")");
+          rainCtx.strokeStyle = gradient;
+        }
         rainCtx.lineWidth = 1 + energy * 1.8;
         rainCtx.beginPath();
         rainCtx.moveTo(d.x, d.y);
@@ -665,7 +684,12 @@
       rafId = 0;
     }
 
-    function runRealtimeLoop() {
+    function runRealtimeLoop(timestamp) {
+      if (timestamp - lastFrameTime < TARGET_FRAME_MS) {
+        rafId = requestAnimationFrame(runRealtimeLoop);
+        return;
+      }
+      lastFrameTime = timestamp;
       updateLyrics();
       paintSoundRain();
       rafId = requestAnimationFrame(runRealtimeLoop);

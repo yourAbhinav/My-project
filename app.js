@@ -35,8 +35,8 @@ const LOW_END_PROFILE = (() => {
   }
 })();
 
-function wait(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+if (LOW_END_PROFILE) {
+  document.documentElement.classList.add("low-end-device");
 }
 
 function randomBetween(min, max) {
@@ -232,6 +232,7 @@ const QuestionScreen = React.memo(function QuestionScreen({
   heartsRef,
   questionText,
   buttonRowRef,
+  noBtnRef,
   onYes,
   onNo,
   noMoving,
@@ -251,6 +252,7 @@ const QuestionScreen = React.memo(function QuestionScreen({
           </button>
           <button
             id="noBtn"
+            ref={noBtnRef}
             className={"btn btn-no" + (noMoving ? " moving" : "")}
             onClick={onNo}
             disabled={yesClicked}
@@ -294,6 +296,7 @@ function App() {
   const questionHeartsRef = useRef(null);
   const finalHeartsRef = useRef(null);
   const buttonRowRef = useRef(null);
+  const noBtnRef = useRef(null);
   const noMoveTimerRef = useRef(0);
   const stopActiveHeartsRef = useRef(() => {});
 
@@ -358,6 +361,8 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (screen !== "question" || yesClicked) return;
+
     let noMoveCooldown = 0;
 
     const handlePointerMove = (pointer) => {
@@ -368,7 +373,7 @@ function App() {
       if (now - noMoveCooldown < cooldown) return;
       noMoveCooldown = now;
 
-      const noBtn = document.getElementById("noBtn");
+      const noBtn = noBtnRef.current;
       if (!noBtn) return;
 
       const noRect = noBtn.getBoundingClientRect();
@@ -416,15 +421,14 @@ function App() {
     if (screen === "love") setScreen("question");
   }, [screen]);
 
-  const handleYesClick = useCallback(async () => {
+  const handleYesClick = useCallback(() => {
     if (yesClicked) return;
     setYesClicked(true);
+    setScreen("final");
     requestAnimationFrame(() => {
       launchConfetti();
       launchHeartRain();
     });
-    await wait(450);
-    setScreen("final");
   }, [yesClicked]);
 
   const handleNoClick = useCallback((e) => {
@@ -477,6 +481,7 @@ function App() {
         heartsRef={questionHeartsRef}
         questionText={CONFIG.QUESTION_TEXT}
         buttonRowRef={buttonRowRef}
+        noBtnRef={noBtnRef}
         onYes={handleYesClick}
         onNo={handleNoClick}
         noMoving={noMoving}

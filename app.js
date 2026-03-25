@@ -266,7 +266,7 @@ const QuestionScreen = React.memo(function QuestionScreen({
   );
 });
 
-const FinalScreen = React.memo(function FinalScreen({ active, heartsRef, quote, onPlaySong }) {
+const FinalScreen = React.memo(function FinalScreen({ active, heartsRef, quote, onPlaySong, isNavigating }) {
   return (
     <section className={"screen final-screen" + (active ? " active" : "") }>
       <div className="hearts-layer" ref={heartsRef}></div>
@@ -274,8 +274,8 @@ const FinalScreen = React.memo(function FinalScreen({ active, heartsRef, quote, 
         <div className="final-heart">💖</div>
         <p className="main-text" style={{ maxWidth: "40ch", margin: "0 auto" }}>{quote}</p>
         <div className="button-row" style={{ marginTop: "18px" }}>
-          <button className="btn btn-yes" onClick={onPlaySong}>
-            Play Song 🎵
+          <button className="btn btn-yes" onClick={onPlaySong} disabled={isNavigating}>
+            {isNavigating ? "Opening Lyrics..." : "Play Song 🎵"}
           </button>
         </div>
       </div>
@@ -288,6 +288,7 @@ function App() {
   const [yesClicked, setYesClicked] = useState(false);
   const [noPos, setNoPos] = useState({ x: 0, y: 0 });
   const [noMoving, setNoMoving] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false);
 
   const finalSongRef = useRef(null);
   const introHeartsRef = useRef(null);
@@ -446,14 +447,21 @@ function App() {
     triggerNoMoveAnimation();
   }, [triggerNoMoveAnimation]);
 
-  const handleSongToggle = useCallback(async (e) => {
+  const handleSongToggle = useCallback((e) => {
     e.stopPropagation();
+    if (isNavigating) return;
+    setIsNavigating(true);
+
     if (finalSongRef.current) {
       finalSongRef.current.pause();
       finalSongRef.current.currentTime = 0;
     }
-    window.location.href = "lyrics.html";
-  }, []);
+
+    document.body.classList.add("page-exit-lyrics");
+    window.setTimeout(() => {
+      window.location.href = "lyrics.html";
+    }, LOW_END_PROFILE ? 180 : 260);
+  }, [isNavigating]);
 
   return (
     <>
@@ -494,6 +502,7 @@ function App() {
         heartsRef={finalHeartsRef}
         quote={CONFIG.FINAL_QUOTE}
         onPlaySong={handleSongToggle}
+        isNavigating={isNavigating}
       />
     </>
   );

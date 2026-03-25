@@ -86,7 +86,7 @@
       font-weight: 700;
       white-space: nowrap;
       user-select: none;
-      filter: drop-shadow(0 0 10px rgba(255, 125, 194, 0.4));
+      text-shadow: 0 0 8px rgba(255, 125, 194, 0.35);
       animation-timing-function: linear;
       animation-fill-mode: forwards;
       will-change: transform, opacity;
@@ -191,6 +191,15 @@
 
     .line.just-activated {
       animation: linePop 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .love-chip,
+      .line.just-activated,
+      .shell,
+      .tap-hint.show {
+        animation: none !important;
+      }
     }
 
     @keyframes shellIn {
@@ -396,7 +405,11 @@
     let rainDrops = [];
     let loveTimer = 0;
     let lastFrameTime = 0;
-    const TARGET_FRAME_MS = LOW_END_PROFILE ? 33 : 16;
+    const TARGET_FRAME_MS = LOW_END_PROFILE ? 34 : 20;
+    const LOVE_LANES = LOW_END_PROFILE ? 7 : 11;
+    const LOVE_CHIP_MAX = LOW_END_PROFILE ? 16 : 28;
+    let loveLaneCursor = Math.floor(Math.random() * LOVE_LANES);
+    let loveLaneOrder = [];
 
     const loveShowerEl = document.getElementById("loveShower");
     const loveTexts = [
@@ -415,10 +428,54 @@
       return Math.random() * (max - min) + min;
     }
 
+    function getLoveSpawnBounds() {
+      const viewportWidth = Math.max(320, window.innerWidth || 360);
+      const sidePaddingPx = Math.min(46, Math.max(16, viewportWidth * 0.04));
+      const min = (sidePaddingPx / viewportWidth) * 100;
+      const max = 100 - min;
+      return { min, max };
+    }
+
+    function buildLoveLaneOrder() {
+      const { min, max } = getLoveSpawnBounds();
+      const range = Math.max(18, max - min);
+      const center = (min + max) * 0.5;
+      const bandWidth = Math.max(16, Math.min(42, range * 0.52));
+      const start = center - bandWidth / 2;
+      const laneStep = LOVE_LANES > 1 ? bandWidth / (LOVE_LANES - 1) : 0;
+      const bases = Array.from({ length: LOVE_LANES }, (_, i) => start + laneStep * i);
+      const order = [];
+      let left = 0;
+      let right = bases.length - 1;
+      while (left <= right) {
+        if (left === right) {
+          order.push(bases[left]);
+          break;
+        }
+        order.push(bases[left]);
+        order.push(bases[right]);
+        left += 1;
+        right -= 1;
+      }
+      return order;
+    }
+
+    function getNextLoveLeftPercent() {
+      if (!loveLaneOrder.length) {
+        loveLaneOrder = buildLoveLaneOrder();
+        loveLaneCursor = Math.floor(Math.random() * loveLaneOrder.length);
+      }
+
+      const base = loveLaneOrder[loveLaneCursor];
+      loveLaneCursor = (loveLaneCursor + 1) % loveLaneOrder.length;
+      const jitter = randomBetween(-0.9, 0.9);
+      return base + jitter;
+    }
+
     function spawnLoveChip() {
       if (!loveShowerEl) return;
 
-      if (loveShowerEl.childElementCount > 42) {
+      if (loveShowerEl.childElementCount > LOVE_CHIP_MAX) {
         loveShowerEl.firstElementChild?.remove();
       }
 
@@ -427,31 +484,46 @@
       const emoji = loveEmojis[Math.floor(Math.random() * loveEmojis.length)];
       const sideEmoji = loveEmojis[Math.floor(Math.random() * loveEmojis.length)];
       const animationClass = loveAnimations[Math.floor(Math.random() * loveAnimations.length)];
+      const leftPercent = getNextLoveLeftPercent();
+      const viewportWidth = Math.max(1, window.innerWidth || 1);
+      const bounds = getLoveSpawnBounds();
 
       chip.className = "love-chip " + animationClass;
       chip.textContent = text + " " + emoji + " " + sideEmoji;
-      chip.style.left = randomBetween(3, 95) + "%";
-      chip.style.setProperty("--dx", randomBetween(-120, 120).toFixed(1) + "px");
-      chip.style.animationDuration = randomBetween(5.4, 10.8).toFixed(2) + "s";
-      chip.style.fontSize = randomBetween(18, 34).toFixed(1) + "px";
+      chip.style.left = leftPercent.toFixed(2) + "%";
+      chip.style.marginLeft = "0px";
+      chip.style.setProperty("--dx", randomBetween(-55, 55).toFixed(1) + "px");
+      chip.style.animationDuration = randomBetween(6.2, 11.8).toFixed(2) + "s";
+      chip.style.fontSize = randomBetween(16, 29).toFixed(1) + "px";
       chip.style.opacity = randomBetween(0.7, 1).toFixed(2);
       chip.style.color = ["#ffd7ef", "#f9d5ff", "#ffffff", "#ffc2de", "#ffe2f2"][Math.floor(Math.random() * 5)];
 
       loveShowerEl.appendChild(chip);
+
+      const chipWidthPx = chip.getBoundingClientRect().width || 0;
+      const halfChipPercent = (chipWidthPx * 0.5 / viewportWidth) * 100;
+      const minCenter = bounds.min + halfChipPercent;
+      const maxCenter = bounds.max - halfChipPercent;
+      const centered = minCenter <= maxCenter
+        ? Math.max(minCenter, Math.min(maxCenter, leftPercent))
+        : (bounds.min + bounds.max) * 0.5;
+      chip.style.left = centered.toFixed(2) + "%";
+      chip.style.marginLeft = (-chipWidthPx * 0.5).toFixed(1) + "px";
+
       setTimeout(() => chip.remove(), 12000);
     }
 
     function startLoveShower() {
       if (loveTimer || !loveShowerEl) return;
 
-      for (let i = 0; i < (LOW_END_PROFILE ? 7 : 14); i++) {
-        setTimeout(spawnLoveChip, i * 140);
+      for (let i = 0; i < (LOW_END_PROFILE ? 5 : 9); i++) {
+        setTimeout(spawnLoveChip, i * 170);
       }
 
       loveTimer = window.setInterval(() => {
-        const burstCount = LOW_END_PROFILE ? 1 : (Math.random() < 0.35 ? 2 : 1);
+        const burstCount = LOW_END_PROFILE ? 1 : (Math.random() < 0.2 ? 2 : 1);
         for (let i = 0; i < burstCount; i++) spawnLoveChip();
-      }, LOW_END_PROFILE ? 640 : 330);
+      }, LOW_END_PROFILE ? 760 : 520);
     }
 
     function setTapHintVisible(show) {
@@ -485,8 +557,8 @@
     }
 
     function seedRainDrops() {
-      const divisor = LOW_END_PROFILE ? 15 : 9;
-      const minDrops = LOW_END_PROFILE ? 24 : 55;
+      const divisor = LOW_END_PROFILE ? 18 : 12;
+      const minDrops = LOW_END_PROFILE ? 18 : 40;
       const count = Math.max(minDrops, Math.floor((window.innerWidth || 360) / divisor));
       rainDrops = Array.from({ length: count }, createRainDrop);
     }
@@ -538,6 +610,7 @@
 
       const speedBoost = 0.7 + energy * 1;
       const glowBoost = 0.16 + energy * 0.62;
+      const rainWidth = 0.95 + energy * 1.2;
 
       for (let i = 0; i < rainDrops.length; i++) {
         const d = rainDrops[i];
@@ -552,15 +625,9 @@
           continue;
         }
 
-        if (LOW_END_PROFILE) {
-          rainCtx.strokeStyle = "rgba(121, 215, 255, " + Math.min(0.72, d.alpha + glowBoost * 0.6) + ")";
-        } else {
-          const gradient = rainCtx.createLinearGradient(d.x, d.y, d.x, d.y + d.length * speedBoost);
-          gradient.addColorStop(0, "rgba(121, 215, 255, 0)");
-          gradient.addColorStop(1, "rgba(121, 215, 255, " + Math.min(0.88, d.alpha + glowBoost) + ")");
-          rainCtx.strokeStyle = gradient;
-        }
-        rainCtx.lineWidth = 1 + energy * 1.8;
+        const alphaBoost = LOW_END_PROFILE ? glowBoost * 0.56 : glowBoost;
+        rainCtx.strokeStyle = "rgba(121, 215, 255, " + Math.min(0.84, d.alpha + alphaBoost) + ")";
+        rainCtx.lineWidth = rainWidth;
         rainCtx.beginPath();
         rainCtx.moveTo(d.x, d.y);
         rainCtx.lineTo(d.x, d.y + d.length * speedBoost);
@@ -751,6 +818,7 @@
     document.addEventListener("keydown", tryUnlockAutoplay);
 
     window.addEventListener("resize", () => {
+      loveLaneOrder = [];
       resizeRainCanvas();
       seedRainDrops();
       paintSoundRain();

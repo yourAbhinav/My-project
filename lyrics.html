@@ -307,7 +307,7 @@
 <body>
   <canvas id="soundRain" aria-hidden="true"></canvas>
   <div id="loveShower" class="love-shower" aria-hidden="true"></div>
-  <audio id="song" src="Mere Nishan✨.mp3" autoplay loop preload="auto"></audio>
+  <audio id="song" autoplay loop preload="auto"></audio>
   <div id="tapHint" class="tap-hint" aria-live="polite">Tap anywhere to play music</div>
 
   <main class="shell">
@@ -370,6 +370,7 @@
     ];
 
     const SYNC_STORAGE_KEY = "mereNishanLyricsSyncV1";
+    const AUDIO_FILE_NAME = "Mere Nishan✨.mp3";
     let LYRICS = [];
 
     const songEl = document.getElementById("song");
@@ -382,6 +383,9 @@
       document.getElementById("line2"),
       document.getElementById("line3"),
     ];
+
+    let audioSourceCandidates = [];
+    let audioSourceIndex = 0;
 
     let autoplayBlocked = false;
 
@@ -401,6 +405,7 @@
     let previousActiveIndex = -1;
     let rainAudioCtx = null;
     let rainAnalyser = null;
+    let rainSource = null;
     let rainFreqData = null;
     let rainDrops = [];
     let loveTimer = 0;
@@ -436,6 +441,28 @@
 
     function randomBetween(min, max) {
       return Math.random() * (max - min) + min;
+    }
+
+    function buildAudioSourceCandidates(fileName) {
+      const raw = String(fileName || "").trim();
+      const forms = [
+        raw,
+        encodeURI(raw),
+        raw.replace(/ /g, "%20"),
+      ].filter(Boolean);
+
+      return Array.from(new Set(forms));
+    }
+
+    function setAudioSource(index) {
+      if (!audioSourceCandidates.length || index >= audioSourceCandidates.length) {
+        return false;
+      }
+
+      audioSourceIndex = index;
+      songEl.src = audioSourceCandidates[audioSourceIndex];
+      songEl.load();
+      return true;
     }
 
     function getLoveSpawnBounds() {
@@ -571,22 +598,35 @@
     function setupSoundRain() {
       if (rainAudioCtx || !(window.AudioContext || window.webkitAudioContext)) return;
 
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      rainAudioCtx = new AudioCtx();
-      rainAnalyser = rainAudioCtx.createAnalyser();
-      rainAnalyser.fftSize = 256;
-      rainAnalyser.smoothingTimeConstant = 0.82;
-      rainFreqData = new Uint8Array(rainAnalyser.frequencyBinCount);
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        rainAudioCtx = new AudioCtx();
+        rainAnalyser = rainAudioCtx.createAnalyser();
+        rainAnalyser.fftSize = 256;
+        rainAnalyser.smoothingTimeConstant = 0.82;
+        rainFreqData = new Uint8Array(rainAnalyser.frequencyBinCount);
 
-      const source = rainAudioCtx.createMediaElementSource(songEl);
-      source.connect(rainAnalyser);
-      rainAnalyser.connect(rainAudioCtx.destination);
+        rainSource = rainAudioCtx.createMediaElementSource(songEl);
+        rainSource.connect(rainAnalyser);
+        // Route media element once to destination and branch analyser from source.
+        rainSource.connect(rainAudioCtx.destination);
+      } catch {
+        // Keep song playback alive even if audio-reactive effects cannot initialize.
+        rainAudioCtx = null;
+        rainAnalyser = null;
+        rainSource = null;
+        rainFreqData = null;
+      }
     }
 
     function resumeSoundRain() {
-      if (!rainAudioCtx) setupSoundRain();
-      if (rainAudioCtx && rainAudioCtx.state === "suspended") {
-        rainAudioCtx.resume().catch(() => {});
+      try {
+        if (!rainAudioCtx) setupSoundRain();
+        if (rainAudioCtx && rainAudioCtx.state === "suspended") {
+          rainAudioCtx.resume().catch(() => {});
+        }
+      } catch {
+        // Ignore visualization audio context issues.
       }
     }
 
@@ -766,6 +806,8 @@
 
     function attemptAutoplay() {
       setTapHintVisible(false);
+      songEl.muted = false;
+      songEl.volume = 1;
       const playPromise = songEl.play();
       if (!playPromise || typeof playPromise.catch !== "function") {
         autoplayBlocked = false;
@@ -777,7 +819,6 @@
         .then(() => {
           autoplayBlocked = false;
           setTapHintVisible(false);
-          resumeSoundRain();
           startRealtimeLoop();
         })
         .catch(() => {
@@ -792,9 +833,26 @@
       paintSoundRain();
       attemptAutoplay();
     });
+
+    songEl.addEventListener("error", () => {
+      const switched = setAudioSource(audioSourceIndex + 1);
+      if (switched) {
+        attemptAutoplay();
+        return;
+      }
+
+      if (tapHintEl) {
+        tapHintEl.textContent = "Audio file not found. Check MP3 name in this folder.";
+      }
+      setTapHintVisible(true);
+    });
+    songEl.addEventListener("canplay", () => {
+      if (songEl.paused) {
+        attemptAutoplay();
+      }
+    });
     songEl.addEventListener("play", () => {
       setTapHintVisible(false);
-      resumeSoundRain();
       startRealtimeLoop();
     });
     songEl.addEventListener("pause", () => {
@@ -813,13 +871,14 @@
     songEl.addEventListener("seeked", () => updateLyrics());
 
     function tryUnlockAutoplay() {
-      if (!autoplayBlocked || !songEl.paused) return;
+      if (!songEl.paused) return;
       setTapHintVisible(false);
       resumeSoundRain();
       attemptAutoplay();
     }
 
     document.addEventListener("pointerdown", tryUnlockAutoplay, { passive: true });
+    document.addEventListener("click", tryUnlockAutoplay, { passive: true });
     document.addEventListener("keydown", tryUnlockAutoplay);
 
     window.addEventListener("resize", () => {
@@ -838,6 +897,9 @@
     requestAnimationFrame(() => {
       document.body.classList.add("page-entered");
     });
+
+    audioSourceCandidates = buildAudioSourceCandidates(AUDIO_FILE_NAME);
+    setAudioSource(0);
 
     initializeTimeline();
     resizeRainCanvas();

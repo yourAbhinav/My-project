@@ -423,6 +423,16 @@
     ];
     const loveEmojis = ["💖", "💕", "💘", "💗", "💓", "🥰", "😘", "😍", "🫶", "✨"];
     const loveAnimations = ["anim-fall", "anim-sway", "anim-spiral", "anim-pop"];
+    const loveFonts = [
+      "'Cormorant Garamond', Georgia, serif",
+      "'Poppins', 'Segoe UI', sans-serif",
+      "'Courier New', monospace",
+      "'Georgia', serif",
+      "'Arial Black', sans-serif",
+      "'Comic Sans MS', cursive",
+      "'Trebuchet MS', sans-serif",
+      "'Times New Roman', serif",
+    ];
 
     function randomBetween(min, max) {
       return Math.random() * (max - min) + min;
@@ -487,6 +497,7 @@
       chip.textContent = text + " " + emoji + " " + sideEmoji;
       chip.style.left = leftPercent.toFixed(2) + "%";
       chip.style.marginLeft = "0px";
+      chip.style.fontFamily = loveFonts[Math.floor(Math.random() * loveFonts.length)];
       chip.style.setProperty("--dx", randomBetween(-55, 55).toFixed(1) + "px");
       chip.style.animationDuration = randomBetween(6.2, 11.8).toFixed(2) + "s";
       chip.style.fontSize = randomBetween(16, 29).toFixed(1) + "px";

@@ -226,51 +226,51 @@
 
     @keyframes loveFall {
       0% {
-        transform: translate3d(0, -6vh, 0) rotate(-4deg) scale(0.9);
+        transform: translate3d(0, -6vh, 0) scale(0.9);
         opacity: 0;
       }
       15% {
         opacity: 1;
       }
       100% {
-        transform: translate3d(var(--dx, 0px), 112vh, 0) rotate(12deg) scale(1.08);
+        transform: translate3d(var(--dx, 0px), 112vh, 0) scale(1.08);
         opacity: 0;
       }
     }
 
     @keyframes loveSway {
       0% {
-        transform: translate3d(0, -8vh, 0) rotate(0deg) scale(0.92);
+        transform: translate3d(0, -8vh, 0) scale(0.92);
         opacity: 0;
       }
       15% {
         opacity: 1;
       }
       35% {
-        transform: translate3d(calc(var(--dx, 0px) * 0.4), 24vh, 0) rotate(-12deg) scale(1);
+        transform: translate3d(calc(var(--dx, 0px) * 0.4), 24vh, 0) scale(1);
       }
       65% {
-        transform: translate3d(calc(var(--dx, 0px) * -0.55), 62vh, 0) rotate(10deg) scale(1.08);
+        transform: translate3d(calc(var(--dx, 0px) * -0.55), 62vh, 0) scale(1.08);
       }
       100% {
-        transform: translate3d(var(--dx, 0px), 112vh, 0) rotate(-16deg) scale(1.02);
+        transform: translate3d(var(--dx, 0px), 112vh, 0) scale(1.02);
         opacity: 0;
       }
     }
 
     @keyframes loveSpiral {
       0% {
-        transform: translate3d(0, -8vh, 0) rotate(0deg) scale(0.85);
+        transform: translate3d(0, -8vh, 0) scale(0.85);
         opacity: 0;
       }
       12% {
         opacity: 1;
       }
       50% {
-        transform: translate3d(calc(var(--dx, 0px) * 0.35), 52vh, 0) rotate(360deg) scale(1.1);
+        transform: translate3d(calc(var(--dx, 0px) * 0.35), 52vh, 0) scale(1.1);
       }
       100% {
-        transform: translate3d(var(--dx, 0px), 112vh, 0) rotate(760deg) scale(1);
+        transform: translate3d(var(--dx, 0px), 112vh, 0) scale(1);
         opacity: 0;
       }
     }
@@ -406,8 +406,8 @@
     let loveTimer = 0;
     let lastFrameTime = 0;
     const TARGET_FRAME_MS = LOW_END_PROFILE ? 34 : 20;
-    const LOVE_LANES = LOW_END_PROFILE ? 7 : 11;
-    const LOVE_CHIP_MAX = LOW_END_PROFILE ? 16 : 28;
+    const LOVE_LANES = LOW_END_PROFILE ? 5 : 7;
+    const LOVE_CHIP_MAX = LOW_END_PROFILE ? 8 : 14;
     let loveLaneCursor = Math.floor(Math.random() * LOVE_LANES);
     let loveLaneOrder = [];
 
@@ -437,13 +437,8 @@
     }
 
     function buildLoveLaneOrder() {
-      const { min, max } = getLoveSpawnBounds();
-      const range = Math.max(18, max - min);
-      const center = (min + max) * 0.5;
-      const bandWidth = Math.max(16, Math.min(42, range * 0.52));
-      const start = center - bandWidth / 2;
-      const laneStep = LOVE_LANES > 1 ? bandWidth / (LOVE_LANES - 1) : 0;
-      const bases = Array.from({ length: LOVE_LANES }, (_, i) => start + laneStep * i);
+      const laneStep = LOVE_LANES > 1 ? 100 / (LOVE_LANES - 1) : 50;
+      const bases = Array.from({ length: LOVE_LANES }, (_, i) => laneStep * i);
       const order = [];
       let left = 0;
       let right = bases.length - 1;
@@ -516,14 +511,13 @@
     function startLoveShower() {
       if (loveTimer || !loveShowerEl) return;
 
-      for (let i = 0; i < (LOW_END_PROFILE ? 5 : 9); i++) {
+      for (let i = 0; i < (LOW_END_PROFILE ? 2 : 3); i++) {
         setTimeout(spawnLoveChip, i * 170);
       }
 
       loveTimer = window.setInterval(() => {
-        const burstCount = LOW_END_PROFILE ? 1 : (Math.random() < 0.2 ? 2 : 1);
-        for (let i = 0; i < burstCount; i++) spawnLoveChip();
-      }, LOW_END_PROFILE ? 760 : 520);
+        spawnLoveChip();
+      }, LOW_END_PROFILE ? 1400 : 1200);
     }
 
     function setTapHintVisible(show) {

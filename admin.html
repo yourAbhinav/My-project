@@ -520,6 +520,33 @@
       letter-spacing: 0.3px;
     }
 
+    .card-head.with-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .btn-refresh-mini {
+      border: 1px solid rgba(255, 107, 53, 0.4);
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-weight: 700;
+      color: #ffd0bf;
+      background: rgba(255, 107, 53, 0.12);
+      cursor: pointer;
+      transition: all 0.3s ease;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      white-space: nowrap;
+    }
+
+    .btn-refresh-mini:hover {
+      background: rgba(255, 107, 53, 0.22);
+      box-shadow: 0 0 16px rgba(255, 107, 53, 0.35);
+    }
+
     .table-card.success .card-head {
       color: var(--neon-cyan);
       text-shadow: 0 0 10px rgba(0, 217, 255, 0.3);
@@ -746,9 +773,9 @@
     <aside class="sidebar">
       <div class="brand">◆ SECURITY HUB</div>
       <nav class="nav" aria-label="Sidebar navigation">
-        <button class="nav-item" type="button">Dashboard</button>
-        <button class="nav-item" type="button">User Management</button>
-        <button class="nav-item active" type="button">Security Logs</button>
+        <button id="navDashboardBtn" class="nav-item" type="button">Dashboard</button>
+        <button id="navUserManagementBtn" class="nav-item" type="button">User Management</button>
+        <button id="navSecurityLogsBtn" class="nav-item active" type="button">Security Logs</button>
         <button class="nav-item" type="button">Analytics</button>
         <button class="nav-item" type="button">Settings</button>
       </nav>
@@ -772,15 +799,18 @@
 
         <div class="toolbar">
           <input id="tableSearch" class="search" type="search" placeholder="🔍 Search logs by email, device, location..." />
-          <button id="refreshDataBtn" class="btn-refresh" type="button">↻ Refresh</button>
+          <button id="refreshDataBtn" class="btn-refresh" type="button">↻ Refresh Logs</button>
           <button id="downloadCsvBtn" class="btn-csv" type="button">⬇ Download CSV</button>
           <div id="loginStatusInline" class="status-inline" aria-live="polite"></div>
         </div>
       </header>
 
       <section class="content">
-        <article class="table-card success">
-          <div class="card-head">✓ Successful Logins</div>
+        <article id="successfulLoginsCard" class="table-card success">
+          <div class="card-head with-actions">
+            <span>✓ Successful Logins</span>
+            <button id="refreshLogsBtn" class="btn-refresh-mini" type="button">Refresh Logs</button>
+          </div>
           <div class="table-wrap">
             <table>
               <thead>
@@ -800,7 +830,7 @@
           </div>
         </article>
 
-        <article class="table-card failed">
+        <article id="failedLoginsCard" class="table-card failed">
           <div class="card-head">✕ Wrong Password Attempts</div>
           <div class="table-wrap">
             <table>
@@ -822,7 +852,7 @@
           </div>
         </article>
 
-        <article class="table-card management">
+        <article id="userManagementCard" class="table-card management">
           <div class="card-head">
             <span class="card-head-title">◎ User Management</span>
             <span class="card-head-actions">
@@ -837,10 +867,11 @@
                   <th>Last Successful Login</th>
                   <th>Last Failed Attempt</th>
                   <th>Status</th>
+                  <th>Action</th>
                 </tr>
               </thead>
               <tbody id="userManagementList">
-                <tr class="empty-row"><td colspan="4">Loading users...</td></tr>
+                <tr class="empty-row"><td colspan="5">Loading users...</td></tr>
               </tbody>
             </table>
           </div>

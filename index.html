@@ -38,36 +38,16 @@
       color: var(--text);
       background-color: #08080c;
       background-image:
-        linear-gradient(160deg, rgba(7, 6, 14, 0.68), rgba(12, 8, 18, 0.7)),
+        linear-gradient(160deg, rgba(6, 4, 10, 0.72), rgba(8, 6, 14, 0.72)),
         var(--photo-bg);
       background-position: center center;
       background-size: cover;
       background-repeat: no-repeat;
     }
 
-    body::before {
-      content: "";
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      background: radial-gradient(circle at 20% 80%, rgba(255, 255, 255, 0.14), transparent 30%),
-        radial-gradient(circle at 80% 18%, rgba(255, 255, 255, 0.12), transparent 25%),
-        radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.1), transparent 45%);
-      filter: blur(1px);
-      z-index: 1;
-    }
-
+    body::before,
     body::after {
-      content: "";
-      position: fixed;
-      inset: -20% -10%;
-      pointer-events: none;
-      background: radial-gradient(circle at 15% 20%, rgba(255, 255, 255, 0.2), transparent 35%),
-        radial-gradient(circle at 78% 28%, rgba(255, 170, 210, 0.26), transparent 34%),
-        radial-gradient(circle at 62% 80%, rgba(255, 110, 185, 0.2), transparent 38%);
-      filter: blur(26px);
-      z-index: 1;
-      animation: auroraDrift 16s ease-in-out infinite alternate;
+      content: none;
     }
 
     .screen {
@@ -77,17 +57,24 @@
       place-items: center;
       opacity: 0;
       visibility: hidden;
-      transform: translateY(16px) scale(1.018);
-      transition: opacity var(--transition), transform var(--transition), visibility 0s linear var(--transition);
+      transition: opacity var(--transition), visibility 0s linear var(--transition);
       padding: clamp(16px, 4vw, 32px);
       z-index: 2;
+    }
+
+    .screen:not(.final-screen) {
+      background-image:
+        linear-gradient(160deg, rgba(6, 4, 10, 0.72), rgba(8, 6, 14, 0.72)),
+        var(--photo-bg);
+      background-position: center center;
+      background-size: cover;
+      background-repeat: no-repeat;
     }
 
     .screen.active {
       opacity: 1;
       visibility: visible;
-      transform: translateY(0) scale(1);
-      transition: opacity var(--transition), transform var(--transition), visibility 0s;
+      transition: opacity var(--transition), visibility 0s;
     }
 
     .screen:not(.active) * {
@@ -133,7 +120,7 @@
     }
 
     .screen.active .script-title {
-      animation: glowPulse 2.8s ease-in-out infinite alternate;
+      animation: none;
     }
 
     .screen.active .script-title,
@@ -516,48 +503,18 @@
 
     .final-screen {
       background-image:
-        linear-gradient(150deg, rgba(10, 8, 20, 0.92), rgba(24, 10, 40, 0.84), rgba(8, 18, 30, 0.88)),
-        radial-gradient(120% 90% at 10% 10%, rgba(255, 70, 170, 0.24), transparent 58%),
-        radial-gradient(110% 90% at 85% 16%, rgba(78, 198, 255, 0.22), transparent 56%),
-        radial-gradient(90% 80% at 52% 88%, rgba(255, 196, 95, 0.2), transparent 60%),
+        linear-gradient(160deg, rgba(10, 10, 16, 0.78), rgba(10, 10, 16, 0.78)),
         var(--final-bg);
       background-position: center center;
       background-size: cover;
       background-repeat: no-repeat;
       overflow: hidden;
-      animation: finalBgPulse 13s ease-in-out infinite alternate;
+      animation: none;
     }
 
     .final-screen::before,
     .final-screen::after {
-      content: "";
-      position: absolute;
-      inset: -12%;
-      pointer-events: none;
-      z-index: 1;
-    }
-
-    .final-screen::before {
-      background:
-        radial-gradient(36% 36% at 18% 24%, rgba(255, 74, 167, 0.24), transparent 72%),
-        radial-gradient(34% 34% at 84% 28%, rgba(78, 190, 255, 0.2), transparent 74%),
-        radial-gradient(40% 40% at 64% 82%, rgba(255, 189, 79, 0.16), transparent 75%),
-        radial-gradient(28% 28% at 28% 74%, rgba(156, 118, 255, 0.18), transparent 76%);
-      mix-blend-mode: screen;
-      filter: blur(24px) saturate(1.15);
-      animation: finalNebulaDrift 9s ease-in-out infinite alternate;
-    }
-
-    .final-screen::after {
-      background:
-        linear-gradient(120deg, rgba(6, 8, 16, 0.6), rgba(17, 9, 28, 0.3), rgba(6, 10, 18, 0.65)),
-        repeating-linear-gradient(
-          -24deg,
-          rgba(255, 255, 255, 0.06) 0 1px,
-          transparent 1px 19px
-        );
-      opacity: 0.55;
-      animation: finalGrainShift 14s linear infinite;
+      content: none;
     }
 
     .final-screen .romantic-glass {
@@ -586,11 +543,20 @@
     }
 
     .final-screen .final-action-row {
-      justify-content: flex-end;
-      width: min(480px, 92%);
+      justify-content: center;
+      width: 100%;
       margin-inline: auto;
-      margin-top: 26px !important;
-      padding-right: 8px;
+      margin-top: auto !important;
+      padding-right: 0;
+      padding-bottom: calc(10px + env(safe-area-inset-bottom));
+    }
+
+    .final-screen .romantic-glass {
+      min-height: min(78vh, 660px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
     }
 
     .final-screen .final-play-btn {
@@ -654,15 +620,6 @@
       }
     }
 
-    @keyframes glowPulse {
-      from {
-        text-shadow: 0 0 10px rgba(255, 255, 255, 0.45), 0 0 26px rgba(255, 104, 173, 0.45);
-      }
-      to {
-        text-shadow: 0 0 16px rgba(255, 255, 255, 0.62), 0 0 48px rgba(255, 86, 160, 0.72);
-      }
-    }
-
     @keyframes driftUp {
       from {
         transform: translate3d(0, 0, 0) scale(0.8) rotate(0deg);
@@ -696,18 +653,6 @@
       to {
         opacity: 1;
         transform: translateY(0);
-      }
-    }
-
-    @keyframes auroraDrift {
-      0% {
-        transform: translate3d(-2%, 0, 0) scale(1);
-      }
-      50% {
-        transform: translate3d(2.2%, -1.5%, 0) scale(1.04);
-      }
-      100% {
-        transform: translate3d(-1%, 1.8%, 0) scale(1.02);
       }
     }
 
@@ -904,7 +849,7 @@
 
     .low-end-device body::after {
       animation: none;
-      filter: blur(10px);
+      filter: none;
     }
 
     .low-end-device .romantic-glass,

@@ -29,9 +29,16 @@ const failedHistoryList = document.getElementById("failedHistoryList");
 const tableSearch = document.getElementById("tableSearch");
 const downloadCsvBtn = document.getElementById("downloadCsvBtn");
 const refreshDataBtn = document.getElementById("refreshDataBtn");
+const refreshLogsBtn = document.getElementById("refreshLogsBtn");
 const forceLogoutAllBtn = document.getElementById("forceLogoutAllBtn");
 const userManagementList = document.getElementById("userManagementList");
 const loginStatusInline = document.getElementById("loginStatusInline");
+const navDashboardBtn = document.getElementById("navDashboardBtn");
+const navUserManagementBtn = document.getElementById("navUserManagementBtn");
+const navSecurityLogsBtn = document.getElementById("navSecurityLogsBtn");
+const successfulLoginsCard = document.getElementById("successfulLoginsCard");
+const failedLoginsCard = document.getElementById("failedLoginsCard");
+const userManagementCard = document.getElementById("userManagementCard");
 let manualAdminLoginInProgress = false;
 let latestLoginEntries = [];
 let latestFailedEntries = [];
@@ -39,6 +46,39 @@ const SESSION_CONTROL_COLLECTION = "sessionControl";
 const SESSION_CONTROL_DOC = "global";
 const SESSION_LOGOUT_VERSION_KEY = "securityHubLogoutVersion";
 let sessionWatcherInitialized = false;
+
+function setActiveNav(viewName) {
+  const links = [
+    { button: navDashboardBtn, view: "dashboard" },
+    { button: navSecurityLogsBtn, view: "logs" },
+    { button: navUserManagementBtn, view: "users" },
+  ];
+
+  links.forEach(({ button, view }) => {
+    if (!button) return;
+    button.classList.toggle("active", view === viewName);
+  });
+}
+
+function showDashboardView(viewName) {
+  setActiveNav(viewName);
+
+  if (successfulLoginsCard) {
+    successfulLoginsCard.classList.toggle("hidden", viewName === "users");
+  }
+
+  if (failedLoginsCard) {
+    failedLoginsCard.classList.toggle("hidden", viewName === "users");
+  }
+
+  if (userManagementCard) {
+    userManagementCard.classList.toggle("hidden", viewName === "logs");
+  }
+
+  if (viewName === "users" && userManagementCard) {
+    userManagementCard.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+}
 
 function setStatus(message, type) {
   loginStatus.textContent = message || "";
@@ -278,12 +318,20 @@ function renderUserManagement() {
 
   const rows = deriveUserManagementRows();
   if (!rows.length) {
-    userManagementList.innerHTML = "<tr class=\"empty-row\"><td colspan=\"4\">No users found from current logs.</td></tr>";
+    userManagementList.innerHTML = "<tr class=\"empty-row\"><td colspan=\"5\">No users found from current logs.</td></tr>";
     return;
   }
 
   const now = Date.now();
   const activeWindowMs = 24 * 60 * 60 * 1000;
+
+  const canForceLogoutUser = (email) => {
+    const normalized = (email || "").trim().toLowerCase();
+    if (!normalized) return false;
+    if (normalized === "unknown user" || normalized === "anonymous") return false;
+    if (normalized === ADMIN_EMAIL.toLowerCase()) return false;
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized);
+  };
 
   userManagementList.innerHTML = rows.map((row) => {
     const successLabel = row.lastSuccess ? row.lastSuccess.label : "No successful login";
@@ -295,12 +343,17 @@ function renderUserManagement() {
     const isActive = lastSeenMs > 0 && now - lastSeenMs <= activeWindowMs;
     const statusClass = isActive ? "user-chip" : "user-chip inactive";
     const statusText = isActive ? "Active (24h)" : "Inactive";
+    const allowForceLogout = canForceLogoutUser(row.email);
+    const actionButton = allowForceLogout
+      ? "<button class=\"btn-danger js-force-user-logout\" type=\"button\" data-email=\"" + safeText(row.email) + "\">Force Logout</button>"
+      : "<span class=\"user-chip inactive\">Unavailable</span>";
 
     return "<tr>"
       + "<td>" + safeText(row.email) + "</td>"
       + "<td>" + safeText(successLabel) + "</td>"
       + "<td>" + safeText(failedLabel) + "</td>"
       + "<td><span class=\"" + statusClass + "\">" + safeText(statusText) + "</span></td>"
+      + "<td>" + actionButton + "</td>"
       + "</tr>";
   }).join("");
 }
@@ -428,6 +481,7 @@ function rerenderTables() {
 
 async function refreshDashboardData() {
   if (refreshDataBtn) refreshDataBtn.disabled = true;
+  if (refreshLogsBtn) refreshLogsBtn.disabled = true;
   if (forceLogoutAllBtn) forceLogoutAllBtn.disabled = true;
 
   try {
@@ -437,17 +491,22 @@ async function refreshDashboardData() {
     setStatus("Dashboard refreshed.", "ok");
   } finally {
     if (refreshDataBtn) refreshDataBtn.disabled = false;
+    if (refreshLogsBtn) refreshLogsBtn.disabled = false;
     if (forceLogoutAllBtn) forceLogoutAllBtn.disabled = false;
   }
 }
 
-async function publishForcedLogout(reason) {
+async function publishForcedLogout(reason, targetEmail) {
   const nextVersion = Date.now();
+  const normalizedTarget = (targetEmail || "").trim().toLowerCase();
+  const hasTarget = Boolean(normalizedTarget);
 
   await setDoc(
     doc(db, SESSION_CONTROL_COLLECTION, SESSION_CONTROL_DOC),
     {
       logoutVersion: nextVersion,
+      logoutScope: hasTarget ? "user" : "all",
+      targetEmail: hasTarget ? normalizedTarget : null,
       reason: reason || "Session ended by admin.",
       updatedBy: (auth.currentUser && auth.currentUser.email) || "unknown",
       updatedAt: serverTimestamp(),
@@ -467,6 +526,8 @@ function initializeSessionLogoutWatcher() {
     async (snapshot) => {
       const data = snapshot.data() || {};
       const remoteVersion = Number(data.logoutVersion || 0);
+      const logoutScope = (data.logoutScope || "all").toLowerCase();
+      const targetEmail = String(data.targetEmail || "").trim().toLowerCase();
       const localVersion = getStoredLogoutVersion();
 
       if (!sessionWatcherInitialized) {
@@ -480,6 +541,14 @@ function initializeSessionLogoutWatcher() {
       setStoredLogoutVersion(remoteVersion);
 
       if (!auth.currentUser) return;
+
+      const currentEmail = String(auth.currentUser.email || "").trim().toLowerCase();
+      const shouldLogout =
+        logoutScope !== "user"
+          ? true
+          : Boolean(targetEmail) && currentEmail === targetEmail;
+
+      if (!shouldLogout) return;
 
       manualAdminLoginInProgress = false;
       await signOut(auth).catch(() => {});
@@ -547,6 +616,59 @@ if (downloadCsvBtn) {
 
 if (refreshDataBtn) {
   refreshDataBtn.addEventListener("click", refreshDashboardData);
+}
+
+if (refreshLogsBtn) {
+  refreshLogsBtn.addEventListener("click", refreshDashboardData);
+}
+
+if (navDashboardBtn) {
+  navDashboardBtn.addEventListener("click", () => {
+    showDashboardView("dashboard");
+  });
+}
+
+if (navSecurityLogsBtn) {
+  navSecurityLogsBtn.addEventListener("click", () => {
+    showDashboardView("logs");
+  });
+}
+
+if (navUserManagementBtn) {
+  navUserManagementBtn.addEventListener("click", () => {
+    showDashboardView("users");
+  });
+}
+
+if (userManagementList) {
+  userManagementList.addEventListener("click", async (event) => {
+    const trigger = event.target && event.target.closest
+      ? event.target.closest(".js-force-user-logout")
+      : null;
+
+    if (!trigger) return;
+
+    if (!auth.currentUser) {
+      setStatus("Sign in as admin to manage user sessions.", "error");
+      return;
+    }
+
+    const email = (trigger.getAttribute("data-email") || "").trim().toLowerCase();
+    if (!email) {
+      setStatus("Could not identify selected user.", "error");
+      return;
+    }
+
+    trigger.disabled = true;
+    try {
+      await publishForcedLogout("Forced logout for user " + email + ".", email);
+      setStatus("Logout signal sent for " + email + ".", "ok");
+    } catch {
+      setStatus("Could not force logout for " + email + ". Check Firestore rules.", "error");
+    } finally {
+      trigger.disabled = false;
+    }
+  });
 }
 
 if (forceLogoutAllBtn) {
@@ -669,7 +791,9 @@ onAuthStateChanged(auth, async (user) => {
 
   adminInfo.textContent = "Logged in as: " + user.email + " (admin)";
   showPanel(true);
+  showDashboardView("dashboard");
   await refreshDashboardData();
 });
 
+showDashboardView("dashboard");
 initializeSessionLogoutWatcher();

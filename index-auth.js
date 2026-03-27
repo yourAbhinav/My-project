@@ -43,6 +43,8 @@ function initializeSessionLogoutWatcher() {
     async (snapshot) => {
       const data = snapshot.data() || {};
       const remoteVersion = Number(data.logoutVersion || 0);
+      const logoutScope = (data.logoutScope || "all").toLowerCase();
+      const targetEmail = String(data.targetEmail || "").trim().toLowerCase();
       const localVersion = getStoredLogoutVersion();
 
       if (!sessionWatcherInitialized) {
@@ -55,6 +57,14 @@ function initializeSessionLogoutWatcher() {
 
       setStoredLogoutVersion(remoteVersion);
       if (!auth.currentUser) return;
+
+      const currentEmail = String(auth.currentUser.email || "").trim().toLowerCase();
+      const shouldLogout =
+        logoutScope !== "user"
+          ? true
+          : Boolean(targetEmail) && currentEmail === targetEmail;
+
+      if (!shouldLogout) return;
 
       manualLoginInProgress = false;
       await signOut(auth).catch(() => {});

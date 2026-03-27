@@ -846,6 +846,9 @@
       <input type="password" id="passwordInput" placeholder="Enter password" />
       <button id="submitBtn">Submit</button>
       <p id="errorMsg" class="error-msg"></p>
+      <p style="margin-top: 10px; margin-bottom: 0; font-size: 0.88rem; opacity: 0.8;">
+        Admin? Open <a href="admin.html" style="color: #fff;">admin panel</a>
+      </p>
     </div>
   </div>
 
@@ -868,43 +871,7 @@
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-  <script>
-    // =========================
-    // PASSWORD AUTHENTICATION
-    // =========================
-    const CORRECT_PASSWORD = "love";
-    const authScreen = document.getElementById("authScreen");
-    const welcomeScreen = document.getElementById("welcomeScreen");
-    const mainContent = document.getElementById("mainContent");
-    const passwordInput = document.getElementById("passwordInput");
-    const submitBtn = document.getElementById("submitBtn");
-    const errorMsg = document.getElementById("errorMsg");
-    const continueBtn = document.getElementById("continueBtn");
-    function authenticateUser() {
-      const enteredPassword = passwordInput.value.trim();
-      if (enteredPassword === CORRECT_PASSWORD) {
-        authScreen.style.display = "none";
-        welcomeScreen.style.display = "flex";
-        errorMsg.textContent = "";
-      } else {
-        errorMsg.textContent = "❌ Incorrect password. Try again.";
-        passwordInput.value = "";
-        passwordInput.focus();
-      }
-    }
-
-    continueBtn.addEventListener("click", () => {
-      welcomeScreen.style.display = "none";
-      mainContent.style.display = "block";
-    });
-
-    submitBtn.addEventListener("click", authenticateUser);
-    passwordInput.addEventListener("keypress", (e) => {
-      if (e.key === "Enter") authenticateUser();
-    });
-
-    passwordInput.focus();
-  </script>
+  <script type="module" src="index-auth.js"></script>
 
   <script type="text/babel" src="app.js"></script>
 </body>

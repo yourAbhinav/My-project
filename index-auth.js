@@ -6,11 +6,13 @@ import {
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   onSnapshot,
+  setDoc,
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
-import { auth, db, SITE_LOGIN_EMAIL, ADMIN_EMAIL } from "./firebase-config.js";
+import { auth, authReady, db, SITE_LOGIN_EMAIL, ADMIN_EMAIL } from "./firebase-config.js";
 
 const authScreen = document.getElementById("authScreen");
 const welcomeScreen = document.getElementById("welcomeScreen");
@@ -23,7 +25,13 @@ let manualLoginInProgress = false;
 const SESSION_CONTROL_COLLECTION = "sessionControl";
 const SESSION_CONTROL_DOC = "global";
 const SESSION_LOGOUT_VERSION_KEY = "securityHubLogoutVersion";
+const ACTIVE_SESSIONS_COLLECTION = "activeSessions";
+const SESSION_HEARTBEAT_INTERVAL_MS = 10000;
+const SESSION_ID_STORAGE_KEY = "securityHubSessionId";
 let sessionWatcherInitialized = false;
+let activeSessionId = "";
+let sessionHeartbeatTimer = null;
+let sessionPresenceLocation = null;
 
 function getStoredLogoutVersion() {
   const raw = localStorage.getItem(SESSION_LOGOUT_VERSION_KEY);
@@ -33,6 +41,118 @@ function getStoredLogoutVersion() {
 
 function setStoredLogoutVersion(version) {
   localStorage.setItem(SESSION_LOGOUT_VERSION_KEY, String(version || 0));
+}
+
+function getOrCreateSessionId() {
+  const existing = (localStorage.getItem(SESSION_ID_STORAGE_KEY) || "").trim();
+  if (existing) return existing;
+
+  const generated =
+    typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : "session-" + Date.now() + "-" + Math.random().toString(16).slice(2);
+
+  localStorage.setItem(SESSION_ID_STORAGE_KEY, generated);
+  return generated;
+}
+
+function getSessionDocRef() {
+  if (!activeSessionId) return null;
+  return doc(db, ACTIVE_SESSIONS_COLLECTION, activeSessionId);
+}
+
+function formatPresencePayload(user) {
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "Unknown timezone";
+  const client = getClientDetails();
+  const email = (user && user.email) || SITE_LOGIN_EMAIL || "unknown";
+
+  return {
+    sessionId: activeSessionId,
+    uid: (user && user.uid) || "",
+    email,
+    browser: client.browser,
+    device: client.device,
+    deviceName: client.deviceName,
+    userAgent: navigator.userAgent || "",
+    language: navigator.language || "",
+    timezone,
+    city: (sessionPresenceLocation && sessionPresenceLocation.city) || "Unknown city",
+    state: (sessionPresenceLocation && sessionPresenceLocation.state) || "Unknown state",
+    country: (sessionPresenceLocation && sessionPresenceLocation.country) || "Unknown country",
+    ip: (sessionPresenceLocation && sessionPresenceLocation.ip) || "",
+    isp: (sessionPresenceLocation && sessionPresenceLocation.isp) || "Unknown ISP",
+    latitude: sessionPresenceLocation ? sessionPresenceLocation.latitude : null,
+    longitude: sessionPresenceLocation ? sessionPresenceLocation.longitude : null,
+    status: "online",
+    page: "index",
+    updatedAt: serverTimestamp(),
+    lastSeenAt: serverTimestamp(),
+    lastSeenLocalAt: new Date().toISOString(),
+  };
+}
+
+async function writeSessionPresence(user) {
+  const ref = getSessionDocRef();
+  if (!ref) return;
+
+  await setDoc(ref, formatPresencePayload(user), { merge: true });
+}
+
+function startSessionHeartbeat(user) {
+  if (sessionHeartbeatTimer) {
+    clearInterval(sessionHeartbeatTimer);
+  }
+
+  sessionHeartbeatTimer = setInterval(() => {
+    if (!auth.currentUser) return;
+    writeSessionPresence(user).catch(() => {
+      // Keep session alive in UI even if one heartbeat write fails.
+    });
+  }, SESSION_HEARTBEAT_INTERVAL_MS);
+}
+
+async function startSessionPresence(user) {
+  if (!user) return;
+
+  activeSessionId = getOrCreateSessionId();
+  sessionPresenceLocation = await getApproxLocation();
+  const ref = getSessionDocRef();
+
+  if (ref) {
+    await setDoc(
+      ref,
+      {
+        sessionStartedAt: serverTimestamp(),
+      },
+      { merge: true }
+    ).catch(() => {
+      // Keep login flow alive even if session-start write fails.
+    });
+  }
+
+  await writeSessionPresence(user).catch(() => {
+    // Do not block login if presence write fails once.
+  });
+  startSessionHeartbeat(user);
+}
+
+async function stopSessionPresence() {
+  if (sessionHeartbeatTimer) {
+    clearInterval(sessionHeartbeatTimer);
+    sessionHeartbeatTimer = null;
+  }
+
+  const ref = getSessionDocRef();
+  if (!ref) {
+    sessionPresenceLocation = null;
+    return;
+  }
+
+  await deleteDoc(ref).catch(() => {
+    // Keep sign-out flow working even if session cleanup fails.
+  });
+
+  sessionPresenceLocation = null;
 }
 
 function initializeSessionLogoutWatcher() {
@@ -67,6 +187,7 @@ function initializeSessionLogoutWatcher() {
       if (!shouldLogout) return;
 
       manualLoginInProgress = false;
+      await stopSessionPresence();
       await signOut(auth).catch(() => {});
       showAuth();
       errorMsg.textContent = "Your session was ended from another device. Please log in again.";
@@ -77,11 +198,12 @@ function initializeSessionLogoutWatcher() {
   );
 }
 
-function getDeviceName() {
+function getClientDetails() {
   const ua = navigator.userAgent || "";
   const platform = navigator.platform || "Unknown platform";
   let os = "Unknown OS";
   let browser = "Unknown browser";
+  let device = "Desktop";
 
   if (/Windows/i.test(ua)) os = "Windows";
   else if (/Android/i.test(ua)) os = "Android";
@@ -89,12 +211,19 @@ function getDeviceName() {
   else if (/Mac OS X|Macintosh/i.test(ua)) os = "macOS";
   else if (/Linux/i.test(ua)) os = "Linux";
 
+  if (/iPad|Tablet/i.test(ua)) device = "Tablet";
+  else if (/Mobi|Android|iPhone|iPod/i.test(ua)) device = "Mobile";
+
   if (/Edg\//i.test(ua)) browser = "Edge";
   else if (/Chrome\//i.test(ua) && !/Edg\//i.test(ua)) browser = "Chrome";
   else if (/Safari\//i.test(ua) && !/Chrome\//i.test(ua)) browser = "Safari";
   else if (/Firefox\//i.test(ua)) browser = "Firefox";
 
-  return browser + " on " + os + " (" + platform + ")";
+  return {
+    browser,
+    device,
+    deviceName: device + " - " + os + " (" + platform + ")",
+  };
 }
 
 async function isLikelyIncognito() {
@@ -122,21 +251,32 @@ async function getApproxLocation() {
         city: "Unknown city",
         state: "Unknown state",
         country: "Unknown country",
+        isp: "Unknown ISP",
+        latitude: null,
+        longitude: null,
       };
     }
 
     const data = await response.json();
+    const latitude = Number(data.latitude);
+    const longitude = Number(data.longitude);
     return {
       city: data.city || "Unknown city",
       state: data.region || "Unknown state",
       country: data.country_name || "Unknown country",
       ip: data.ip || "",
+      isp: data.org || data.asn_org || "Unknown ISP",
+      latitude: Number.isFinite(latitude) ? latitude : null,
+      longitude: Number.isFinite(longitude) ? longitude : null,
     };
   } catch {
     return {
       city: "Unknown city",
       state: "Unknown state",
       country: "Unknown country",
+      isp: "Unknown ISP",
+      latitude: null,
+      longitude: null,
     };
   }
 }
@@ -144,12 +284,15 @@ async function getApproxLocation() {
 async function recordLoginEvent(userEmail) {
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "Unknown timezone";
   const location = await getApproxLocation();
+  const client = getClientDetails();
 
   const payload = {
     email: userEmail || "unknown",
     loginAt: serverTimestamp(),
     localLoginAt: new Date().toISOString(),
-    deviceName: getDeviceName(),
+    device: client.device,
+    browser: client.browser,
+    deviceName: client.deviceName,
     userAgent: navigator.userAgent || "",
     language: navigator.language || "",
     timezone,
@@ -157,6 +300,9 @@ async function recordLoginEvent(userEmail) {
     state: location.state,
     country: location.country,
     ip: location.ip || "",
+    isp: location.isp || "Unknown ISP",
+    latitude: location.latitude,
+    longitude: location.longitude,
   };
 
   try {
@@ -169,13 +315,16 @@ async function recordLoginEvent(userEmail) {
 async function recordFailedLoginAttempt(userEmail, attemptedPassword) {
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "Unknown timezone";
   const location = await getApproxLocation();
+  const client = getClientDetails();
 
   const payload = {
     email: userEmail || "unknown",
     attemptedPassword: attemptedPassword || "",
     failedAt: serverTimestamp(),
     localFailedAt: new Date().toISOString(),
-    deviceName: getDeviceName(),
+    device: client.device,
+    browser: client.browser,
+    deviceName: client.deviceName,
     userAgent: navigator.userAgent || "",
     language: navigator.language || "",
     timezone,
@@ -183,6 +332,9 @@ async function recordFailedLoginAttempt(userEmail, attemptedPassword) {
     state: location.state,
     country: location.country,
     ip: location.ip || "",
+    isp: location.isp || "Unknown ISP",
+    latitude: location.latitude,
+    longitude: location.longitude,
   };
 
   try {
@@ -246,8 +398,10 @@ async function authenticateUser() {
   manualLoginInProgress = true;
 
   try {
+    await authReady;
     const credential = await signInWithEmailAndPassword(auth, SITE_LOGIN_EMAIL, enteredPassword);
     await recordLoginEvent(credential.user && credential.user.email);
+    await startSessionPresence(credential.user);
     showWelcome();
     passwordInput.value = "";
   } catch (err) {
@@ -277,20 +431,21 @@ onAuthStateChanged(auth, async (user) => {
 
   if (!user) {
     manualLoginInProgress = false;
+    await stopSessionPresence();
     showAuth();
     return;
   }
 
   if ((user.email || "").toLowerCase() !== SITE_LOGIN_EMAIL.toLowerCase()) {
     manualLoginInProgress = false;
-    await signOut(auth).catch(() => {});
+    await stopSessionPresence();
     showAuth();
     errorMsg.textContent = "Only authorized account can access this page.";
     return;
   }
 
   if (!manualLoginInProgress) {
-    await signOut(auth).catch(() => {});
+    await stopSessionPresence();
     showAuth();
     errorMsg.textContent = "Please enter password again.";
     return;

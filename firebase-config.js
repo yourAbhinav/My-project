@@ -1,5 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
-import { getAuth } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
+import {
+  browserLocalPersistence,
+  getAuth,
+  setPersistence,
+} from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
 import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -14,4 +18,7 @@ export const ADMIN_EMAIL = "abhinavkumar09870@gmail.com";
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
+export const authReady = setPersistence(auth, browserLocalPersistence).catch(() => {
+  // Keep auth functional even if persistence cannot be configured in this browser mode.
+});
 export const db = getFirestore(app);

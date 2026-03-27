@@ -14,7 +14,7 @@ import {
   serverTimestamp,
   setDoc,
 } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
-import { auth, db, ADMIN_EMAIL, SITE_LOGIN_EMAIL } from "./firebase-config.js";
+import { auth, authReady, db, ADMIN_EMAIL, SITE_LOGIN_EMAIL } from "./firebase-config.js";
 
 const loginCard = document.getElementById("loginCard");
 const panelCard = document.getElementById("panelCard");
@@ -27,7 +27,7 @@ const logoutBtn = document.getElementById("logoutBtn");
 const loginHistoryList = document.getElementById("loginHistoryList");
 const failedHistoryList = document.getElementById("failedHistoryList");
 const tableSearch = document.getElementById("tableSearch");
-const downloadCsvBtn = document.getElementById("downloadCsvBtn");
+const downloadPdfBtn = document.getElementById("downloadPdfBtn");
 const refreshDataBtn = document.getElementById("refreshDataBtn");
 const refreshLogsBtn = document.getElementById("refreshLogsBtn");
 const forceLogoutAllBtn = document.getElementById("forceLogoutAllBtn");
@@ -40,12 +40,17 @@ const successfulLoginsCard = document.getElementById("successfulLoginsCard");
 const failedLoginsCard = document.getElementById("failedLoginsCard");
 const userManagementCard = document.getElementById("userManagementCard");
 let manualAdminLoginInProgress = false;
+let authenticatedAdminUid = "";
 let latestLoginEntries = [];
 let latestFailedEntries = [];
+let latestActiveSessions = [];
 const SESSION_CONTROL_COLLECTION = "sessionControl";
 const SESSION_CONTROL_DOC = "global";
 const SESSION_LOGOUT_VERSION_KEY = "securityHubLogoutVersion";
+const ACTIVE_SESSIONS_COLLECTION = "activeSessions";
+const ACTIVE_SESSION_WINDOW_MS = 30 * 1000;
 let sessionWatcherInitialized = false;
+let activeSessionUnsubscribe = null;
 
 function setActiveNav(viewName) {
   const links = [
@@ -165,6 +170,29 @@ function isAnonymousEmail(email) {
   return (email || "").toLowerCase() === "anonymous";
 }
 
+function detectBrowserFromUserAgent(userAgent) {
+  const ua = String(userAgent || "");
+  if (/Edg\//i.test(ua)) return "Edge";
+  if (/Firefox\//i.test(ua)) return "Firefox";
+  if (/Chrome\//i.test(ua) && !/Edg\//i.test(ua)) return "Chrome";
+  if (/Safari\//i.test(ua) && !/Chrome\//i.test(ua)) return "Safari";
+  return "Unknown browser";
+}
+
+function getDeviceLabel(item) {
+  return item.device || item.deviceName || "Unknown device";
+}
+
+function getBrowserLabel(item) {
+  return item.browser || detectBrowserFromUserAgent(item.userAgent);
+}
+
+function formatCoordinate(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return "Unknown";
+  return parsed.toFixed(5);
+}
+
 function getSearchText(item, timeValue) {
   const city = item.city || "";
   const state = item.state || "";
@@ -173,10 +201,14 @@ function getSearchText(item, timeValue) {
   return [
     item.email,
     timeValue,
-    item.deviceName,
+    getDeviceLabel(item),
+    getBrowserLabel(item),
     city,
     state,
     country,
+    item.isp,
+    item.latitude,
+    item.longitude,
     item.timezone,
     item.ip,
     item.attemptedPassword,
@@ -199,29 +231,32 @@ function renderLoginHistory(entries) {
   const filteredEntries = applySearch(entries, formatLoginTime);
 
   if (!filteredEntries.length) {
-    loginHistoryList.innerHTML = "<tr class=\"empty-row\"><td colspan=\"6\">No login history yet.</td></tr>";
+    loginHistoryList.innerHTML = "<tr class=\"empty-row\"><td colspan=\"9\">No login history yet.</td></tr>";
     return;
   }
 
   loginHistoryList.innerHTML = filteredEntries.map((item) => {
     const email = item.email || "Unknown user";
-    const deviceName = item.deviceName || "Unknown device";
     const loginTime = formatLoginTime(item);
+    const device = getDeviceLabel(item);
+    const browser = getBrowserLabel(item);
     const city = item.city || "Unknown city";
-    const state = item.state || "Unknown state";
-    const country = item.country || "Unknown country";
-    const timezone = item.timezone || "Unknown timezone";
+    const isp = item.isp || "Unknown ISP";
+    const latitude = formatCoordinate(item.latitude);
+    const longitude = formatCoordinate(item.longitude);
     const ip = item.ip || "N/A";
-    const address = city + ", " + state + ", " + country;
     const emailCellClass = isAnonymousEmail(email) ? "cell-anonymous" : "";
 
     return "<tr>"
       + "<td class=\"" + emailCellClass + "\">" + safeText(email) + "</td>"
       + "<td>" + safeText(loginTime) + "</td>"
-      + "<td>" + safeText(deviceName) + "</td>"
-      + "<td>" + safeText(address) + "</td>"
-      + "<td>" + safeText(timezone) + "</td>"
       + "<td>" + safeText(ip) + "</td>"
+      + "<td>" + safeText(city) + "</td>"
+      + "<td>" + safeText(isp) + "</td>"
+      + "<td>" + safeText(device) + "</td>"
+      + "<td>" + safeText(browser) + "</td>"
+      + "<td>" + safeText(latitude) + "</td>"
+      + "<td>" + safeText(longitude) + "</td>"
       + "</tr>";
   }).join("");
 }
@@ -253,6 +288,19 @@ function getFailedDate(data) {
   return null;
 }
 
+function getSessionDate(data) {
+  if (data && data.lastSeenAt && typeof data.lastSeenAt.toDate === "function") {
+    return data.lastSeenAt.toDate();
+  }
+
+  if (data && data.lastSeenLocalAt) {
+    const parsed = new Date(data.lastSeenLocalAt);
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+  }
+
+  return null;
+}
+
 function getStoredLogoutVersion() {
   const raw = localStorage.getItem(SESSION_LOGOUT_VERSION_KEY);
   const parsed = Number(raw || 0);
@@ -263,15 +311,66 @@ function setStoredLogoutVersion(version) {
   localStorage.setItem(SESSION_LOGOUT_VERSION_KEY, String(version || 0));
 }
 
+function isSessionOnline(item) {
+  const status = String(item && item.status ? item.status : "online").toLowerCase();
+  if (status !== "online") return false;
+
+  const seenDate = getSessionDate(item);
+  if (!seenDate) return false;
+
+  return Date.now() - seenDate.getTime() <= ACTIVE_SESSION_WINDOW_MS;
+}
+
+function formatSessionSeen(item) {
+  const seenDate = getSessionDate(item);
+  return seenDate ? seenDate.toLocaleString() : "Unknown time";
+}
+
+function normalizeUserEmail(email) {
+  const trimmed = String(email || "").trim();
+  return trimmed || "Unknown user";
+}
+
+function subscribeActiveSessions() {
+  if (activeSessionUnsubscribe) return;
+
+  activeSessionUnsubscribe = onSnapshot(
+    collection(db, ACTIVE_SESSIONS_COLLECTION),
+    (snapshot) => {
+      latestActiveSessions = snapshot.docs.map((snapshotDoc) => {
+        const data = snapshotDoc.data() || {};
+        return {
+          id: snapshotDoc.id,
+          ...data,
+        };
+      });
+      renderUserManagement();
+    },
+    () => {
+      latestActiveSessions = [];
+      renderUserManagement();
+      setStatus("Could not load live session data. Check Firestore rules.", "error");
+    }
+  );
+}
+
+function unsubscribeActiveSessions() {
+  if (!activeSessionUnsubscribe) return;
+  activeSessionUnsubscribe();
+  activeSessionUnsubscribe = null;
+  latestActiveSessions = [];
+}
+
 function deriveUserManagementRows() {
   const users = new Map();
 
   latestLoginEntries.forEach((item) => {
-    const email = (item.email || "Unknown user").trim() || "Unknown user";
+    const email = normalizeUserEmail(item.email);
     const current = users.get(email) || {
       email,
       lastSuccess: null,
       lastFailed: null,
+      activeSessions: [],
     };
     const date = getLoginDate(item);
     if (!current.lastSuccess || (date && date > current.lastSuccess.date)) {
@@ -284,11 +383,12 @@ function deriveUserManagementRows() {
   });
 
   latestFailedEntries.forEach((item) => {
-    const email = (item.email || "Unknown user").trim() || "Unknown user";
+    const email = normalizeUserEmail(item.email);
     const current = users.get(email) || {
       email,
       lastSuccess: null,
       lastFailed: null,
+      activeSessions: [],
     };
     const date = getFailedDate(item);
     if (!current.lastFailed || (date && date > current.lastFailed.date)) {
@@ -300,14 +400,38 @@ function deriveUserManagementRows() {
     users.set(email, current);
   });
 
+  latestActiveSessions.forEach((item) => {
+    const email = normalizeUserEmail(item.email);
+    const current = users.get(email) || {
+      email,
+      lastSuccess: null,
+      lastFailed: null,
+      activeSessions: [],
+    };
+
+    if (isSessionOnline(item)) {
+      current.activeSessions.push(item);
+    }
+
+    users.set(email, current);
+  });
+
   return Array.from(users.values()).sort((a, b) => {
     const aTime = Math.max(
       a.lastSuccess && a.lastSuccess.date ? a.lastSuccess.date.getTime() : 0,
-      a.lastFailed && a.lastFailed.date ? a.lastFailed.date.getTime() : 0
+      a.lastFailed && a.lastFailed.date ? a.lastFailed.date.getTime() : 0,
+      ...a.activeSessions.map((session) => {
+        const sessionDate = getSessionDate(session);
+        return sessionDate ? sessionDate.getTime() : 0;
+      })
     );
     const bTime = Math.max(
       b.lastSuccess && b.lastSuccess.date ? b.lastSuccess.date.getTime() : 0,
-      b.lastFailed && b.lastFailed.date ? b.lastFailed.date.getTime() : 0
+      b.lastFailed && b.lastFailed.date ? b.lastFailed.date.getTime() : 0,
+      ...b.activeSessions.map((session) => {
+        const sessionDate = getSessionDate(session);
+        return sessionDate ? sessionDate.getTime() : 0;
+      })
     );
     return bTime - aTime;
   });
@@ -318,12 +442,9 @@ function renderUserManagement() {
 
   const rows = deriveUserManagementRows();
   if (!rows.length) {
-    userManagementList.innerHTML = "<tr class=\"empty-row\"><td colspan=\"5\">No users found from current logs.</td></tr>";
+    userManagementList.innerHTML = "<tr class=\"empty-row\"><td colspan=\"6\">No users found from current logs and active sessions.</td></tr>";
     return;
   }
-
-  const now = Date.now();
-  const activeWindowMs = 24 * 60 * 60 * 1000;
 
   const canForceLogoutUser = (email) => {
     const normalized = (email || "").trim().toLowerCase();
@@ -336,13 +457,22 @@ function renderUserManagement() {
   userManagementList.innerHTML = rows.map((row) => {
     const successLabel = row.lastSuccess ? row.lastSuccess.label : "No successful login";
     const failedLabel = row.lastFailed ? row.lastFailed.label : "No failed attempt";
-    const lastSeenMs = Math.max(
-      row.lastSuccess && row.lastSuccess.date ? row.lastSuccess.date.getTime() : 0,
-      row.lastFailed && row.lastFailed.date ? row.lastFailed.date.getTime() : 0
-    );
-    const isActive = lastSeenMs > 0 && now - lastSeenMs <= activeWindowMs;
-    const statusClass = isActive ? "user-chip" : "user-chip inactive";
-    const statusText = isActive ? "Active (24h)" : "Inactive";
+    const activeCount = row.activeSessions.length;
+    const statusClass = activeCount > 0 ? "user-chip" : "user-chip inactive";
+    const statusText = activeCount > 0 ? "Live" : "Offline";
+    const deviceDetails = activeCount > 0
+      ? row.activeSessions.map((session) => {
+        const details = [
+          getDeviceLabel(session),
+          getBrowserLabel(session),
+          session.city || "Unknown city",
+          session.ip ? "IP " + session.ip : "IP N/A",
+          "Seen " + formatSessionSeen(session),
+        ];
+
+        return "<div>" + safeText(details.join(" | ")) + "</div>";
+      }).join("")
+      : "<span class=\"user-chip inactive\">No active devices</span>";
     const allowForceLogout = canForceLogoutUser(row.email);
     const actionButton = allowForceLogout
       ? "<button class=\"btn-danger js-force-user-logout\" type=\"button\" data-email=\"" + safeText(row.email) + "\">Force Logout</button>"
@@ -350,10 +480,11 @@ function renderUserManagement() {
 
     return "<tr>"
       + "<td>" + safeText(row.email) + "</td>"
+      + "<td><span class=\"" + statusClass + "\">" + safeText(String(activeCount)) + " device(s)</span></td>"
+      + "<td>" + deviceDetails + "</td>"
       + "<td>" + safeText(successLabel) + "</td>"
       + "<td>" + safeText(failedLabel) + "</td>"
-      + "<td><span class=\"" + statusClass + "\">" + safeText(statusText) + "</span></td>"
-      + "<td>" + actionButton + "</td>"
+      + "<td><span class=\"" + statusClass + "\">" + safeText(statusText) + "</span><br>" + actionButton + "</td>"
       + "</tr>";
   }).join("");
 }
@@ -364,113 +495,121 @@ function renderFailedHistory(entries) {
   const filteredEntries = applySearch(entries, formatFailedTime);
 
   if (!filteredEntries.length) {
-    failedHistoryList.innerHTML = "<tr class=\"empty-row\"><td colspan=\"7\">No wrong password attempts yet.</td></tr>";
+    failedHistoryList.innerHTML = "<tr class=\"empty-row\"><td colspan=\"10\">No wrong password attempts yet.</td></tr>";
     return;
   }
 
   failedHistoryList.innerHTML = filteredEntries.map((item) => {
     const email = item.email || "Unknown user";
-    const deviceName = item.deviceName || "Unknown device";
     const failedTime = formatFailedTime(item);
+    const device = getDeviceLabel(item);
+    const browser = getBrowserLabel(item);
     const city = item.city || "Unknown city";
-    const state = item.state || "Unknown state";
-    const country = item.country || "Unknown country";
-    const timezone = item.timezone || "Unknown timezone";
+    const isp = item.isp || "Unknown ISP";
+    const latitude = formatCoordinate(item.latitude);
+    const longitude = formatCoordinate(item.longitude);
     const attemptedPassword = item.attemptedPassword || "";
     const ip = item.ip || "N/A";
-    const address = city + ", " + state + ", " + country;
     const emailCellClass = isAnonymousEmail(email) ? "cell-anonymous" : "";
 
     return "<tr>"
       + "<td class=\"" + emailCellClass + "\">" + safeText(email) + "</td>"
       + "<td>" + safeText(failedTime) + "</td>"
-      + "<td>" + safeText(deviceName) + "</td>"
-      + "<td>" + safeText(address) + "</td>"
-      + "<td>" + safeText(timezone) + "</td>"
       + "<td>" + safeText(ip) + "</td>"
+      + "<td>" + safeText(city) + "</td>"
+      + "<td>" + safeText(isp) + "</td>"
+      + "<td>" + safeText(device) + "</td>"
+      + "<td>" + safeText(browser) + "</td>"
+      + "<td>" + safeText(latitude) + "</td>"
+      + "<td>" + safeText(longitude) + "</td>"
       + "<td><span class=\"cell-password\">" + safeText(attemptedPassword) + "</span></td>"
       + "</tr>";
   }).join("");
 }
 
-function csvEscape(value) {
-  const str = String(value == null ? "" : value);
-  if (/[,\"\n]/.test(str)) {
-    return '"' + str.replace(/\"/g, '""') + '"';
-  }
-
-  return str;
-}
-
-function buildCsvContent() {
-  const successHeader = [
+function buildExportRows() {
+  const headers = [
     "Type",
     "Email",
-    "Date & Time",
-    "Device/Browser",
-    "Location",
-    "Timezone",
-    "IP Address",
+    "Login Time",
+    "IP",
+    "City",
+    "ISP",
+    "Device",
+    "Browser",
+    "Latitude",
+    "Longitude",
     "Password Typed",
   ];
 
-  const successRows = latestLoginEntries.map((item) => {
-    const city = item.city || "Unknown city";
-    const state = item.state || "Unknown state";
-    const country = item.country || "Unknown country";
+  const successRows = latestLoginEntries.map((item) => [
+    "Successful Login",
+    item.email || "Unknown user",
+    formatLoginTime(item),
+    item.ip || "N/A",
+    item.city || "Unknown city",
+    item.isp || "Unknown ISP",
+    getDeviceLabel(item),
+    getBrowserLabel(item),
+    formatCoordinate(item.latitude),
+    formatCoordinate(item.longitude),
+    "",
+  ]);
 
-    return [
-      "Successful Login",
-      item.email || "Unknown user",
-      formatLoginTime(item),
-      item.deviceName || "Unknown device",
-      city + ", " + state + ", " + country,
-      item.timezone || "Unknown timezone",
-      item.ip || "N/A",
-      "",
-    ];
-  });
+  const failedRows = latestFailedEntries.map((item) => [
+    "Wrong Password Attempt",
+    item.email || "Unknown user",
+    formatFailedTime(item),
+    item.ip || "N/A",
+    item.city || "Unknown city",
+    item.isp || "Unknown ISP",
+    getDeviceLabel(item),
+    getBrowserLabel(item),
+    formatCoordinate(item.latitude),
+    formatCoordinate(item.longitude),
+    item.attemptedPassword || "",
+  ]);
 
-  const failedRows = latestFailedEntries.map((item) => {
-    const city = item.city || "Unknown city";
-    const state = item.state || "Unknown state";
-    const country = item.country || "Unknown country";
-
-    return [
-      "Wrong Password Attempt",
-      item.email || "Unknown user",
-      formatFailedTime(item),
-      item.deviceName || "Unknown device",
-      city + ", " + state + ", " + country,
-      item.timezone || "Unknown timezone",
-      item.ip || "N/A",
-      item.attemptedPassword || "",
-    ];
-  });
-
-  const rows = [successHeader, ...successRows, ...failedRows];
-  return rows.map((row) => row.map(csvEscape).join(",")).join("\n");
+  return {
+    headers,
+    rows: [...successRows, ...failedRows],
+  };
 }
 
-function downloadCsvFile() {
+function downloadPdfFile() {
   if (!latestLoginEntries.length && !latestFailedEntries.length) {
     setStatus("No data available to export.", "error");
     return;
   }
 
-  const csvContent = buildCsvContent();
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  const datePart = new Date().toISOString().slice(0, 10);
+  const jspdfNamespace = window.jspdf;
+  if (!jspdfNamespace || !jspdfNamespace.jsPDF) {
+    setStatus("PDF library is not loaded. Reload the page and try again.", "error");
+    return;
+  }
 
-  link.href = url;
-  link.download = "security-logs-" + datePart + ".csv";
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
-  setStatus("CSV downloaded successfully.", "ok");
+  const { headers, rows } = buildExportRows();
+  const doc = new jspdfNamespace.jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+  const datePart = new Date().toISOString().slice(0, 10);
+  const generatedAt = new Date().toLocaleString();
+
+  doc.setFontSize(14);
+  doc.text("Security Login Logs", 40, 34);
+  doc.setFontSize(10);
+  doc.text("Generated: " + generatedAt, 40, 52);
+
+  doc.autoTable({
+    head: [headers],
+    body: rows,
+    startY: 64,
+    margin: { left: 20, right: 20 },
+    styles: { fontSize: 7, cellPadding: 3, overflow: "linebreak" },
+    headStyles: { fillColor: [10, 14, 39] },
+    tableWidth: "auto",
+  });
+
+  doc.save("security-logs-" + datePart + ".pdf");
+  setStatus("PDF downloaded successfully.", "ok");
 }
 
 function rerenderTables() {
@@ -486,6 +625,7 @@ async function refreshDashboardData() {
 
   try {
     setStatus("Refreshing data...", "ok");
+    subscribeActiveSessions();
     await Promise.all([loadLoginHistory(), loadFailedHistory()]);
     renderUserManagement();
     setStatus("Dashboard refreshed.", "ok");
@@ -551,6 +691,7 @@ function initializeSessionLogoutWatcher() {
       if (!shouldLogout) return;
 
       manualAdminLoginInProgress = false;
+      authenticatedAdminUid = "";
       await signOut(auth).catch(() => {});
       showPanel(false);
       adminPass.value = "";
@@ -565,7 +706,7 @@ function initializeSessionLogoutWatcher() {
 async function loadLoginHistory() {
   if (!loginHistoryList) return;
 
-  loginHistoryList.innerHTML = "<tr class=\"empty-row\"><td colspan=\"6\">Loading login history...</td></tr>";
+  loginHistoryList.innerHTML = "<tr class=\"empty-row\"><td colspan=\"9\">Loading login history...</td></tr>";
 
   try {
     const historyQuery = query(
@@ -579,14 +720,14 @@ async function loadLoginHistory() {
     latestLoginEntries = items;
     renderLoginHistory(latestLoginEntries);
   } catch {
-    loginHistoryList.innerHTML = "<tr class=\"empty-row\"><td colspan=\"6\">Could not load history. Check Firestore rules.</td></tr>";
+    loginHistoryList.innerHTML = "<tr class=\"empty-row\"><td colspan=\"9\">Could not load history. Check Firestore rules.</td></tr>";
   }
 }
 
 async function loadFailedHistory() {
   if (!failedHistoryList) return;
 
-  failedHistoryList.innerHTML = "<tr class=\"empty-row\"><td colspan=\"7\">Loading failed attempts...</td></tr>";
+  failedHistoryList.innerHTML = "<tr class=\"empty-row\"><td colspan=\"10\">Loading failed attempts...</td></tr>";
 
   try {
     const failedQuery = query(
@@ -600,7 +741,7 @@ async function loadFailedHistory() {
     latestFailedEntries = items;
     renderFailedHistory(latestFailedEntries);
   } catch {
-    failedHistoryList.innerHTML = "<tr class=\"empty-row\"><td colspan=\"7\">Could not load failed attempts. Check Firestore rules.</td></tr>";
+    failedHistoryList.innerHTML = "<tr class=\"empty-row\"><td colspan=\"10\">Could not load failed attempts. Check Firestore rules.</td></tr>";
   }
 }
 
@@ -610,8 +751,8 @@ if (tableSearch) {
   });
 }
 
-if (downloadCsvBtn) {
-  downloadCsvBtn.addEventListener("click", downloadCsvFile);
+if (downloadPdfBtn) {
+  downloadPdfBtn.addEventListener("click", downloadPdfFile);
 }
 
 if (refreshDataBtn) {
@@ -704,19 +845,24 @@ adminLoginBtn.addEventListener("click", async () => {
     setStatus("Signing in...", "ok");
     manualAdminLoginInProgress = true;
 
+    await authReady;
     const credential = await signInWithEmailAndPassword(auth, email, password);
     if (!isAdminUser(credential.user)) {
       manualAdminLoginInProgress = false;
+      authenticatedAdminUid = "";
       await signOut(auth).catch(() => {});
       setStatus("This account is not allowed for admin panel.", "error");
       showPanel(false);
       return;
     }
 
+    authenticatedAdminUid = credential.user && credential.user.uid ? credential.user.uid : "";
+
     adminPass.value = "";
     setStatus("Admin login successful.", "ok");
     adminInfo.textContent = "Logged in as: " + credential.user.email + " (admin)";
     showPanel(true);
+    subscribeActiveSessions();
     await refreshDashboardData();
   } catch (err) {
     manualAdminLoginInProgress = false;
@@ -749,6 +895,8 @@ logoutBtn.addEventListener("click", async () => {
     // Even if sign out fails, hide panel to avoid stale admin UI.
   }
 
+  authenticatedAdminUid = "";
+  unsubscribeActiveSessions();
   showPanel(false);
   setStatus(
     sentGlobalLogout
@@ -762,28 +910,41 @@ logoutBtn.addEventListener("click", async () => {
 onAuthStateChanged(auth, async (user) => {
   if (!validateConfig()) {
     manualAdminLoginInProgress = false;
+    authenticatedAdminUid = "";
+    unsubscribeActiveSessions();
     showPanel(false);
     return;
   }
 
   if (!user) {
     manualAdminLoginInProgress = false;
+    authenticatedAdminUid = "";
+    unsubscribeActiveSessions();
     showPanel(false);
     return;
   }
 
   if (!isAdminUser(user)) {
     manualAdminLoginInProgress = false;
+    authenticatedAdminUid = "";
+    unsubscribeActiveSessions();
     await signOut(auth).catch(() => {});
     showPanel(false);
     setStatus("This account is not allowed for admin panel.", "error");
     return;
   }
 
-  if (!manualAdminLoginInProgress) {
+  if (!authenticatedAdminUid) {
+    authenticatedAdminUid = user.uid || "";
+  }
+
+  if (authenticatedAdminUid && user.uid && authenticatedAdminUid !== user.uid) {
+    manualAdminLoginInProgress = false;
+    authenticatedAdminUid = "";
+    unsubscribeActiveSessions();
     await signOut(auth).catch(() => {});
     showPanel(false);
-    setStatus("Please enter admin password again.", "error");
+    setStatus("Session mismatch detected. Please sign in again.", "error");
     return;
   }
 
@@ -791,6 +952,7 @@ onAuthStateChanged(auth, async (user) => {
 
   adminInfo.textContent = "Logged in as: " + user.email + " (admin)";
   showPanel(true);
+  subscribeActiveSessions();
   showDashboardView("dashboard");
   await refreshDashboardData();
 });

@@ -800,7 +800,7 @@
         <div class="toolbar">
           <input id="tableSearch" class="search" type="search" placeholder="🔍 Search logs by email, device, location..." />
           <button id="refreshDataBtn" class="btn-refresh" type="button">↻ Refresh Logs</button>
-          <button id="downloadCsvBtn" class="btn-csv" type="button">⬇ Download CSV</button>
+          <button id="downloadPdfBtn" class="btn-csv" type="button">⬇ Download PDF</button>
           <div id="loginStatusInline" class="status-inline" aria-live="polite"></div>
         </div>
       </header>
@@ -816,15 +816,18 @@
               <thead>
                 <tr>
                   <th>Email</th>
-                  <th>Date & Time</th>
-                  <th>Device/Browser</th>
-                  <th>Location</th>
-                  <th>Timezone</th>
-                  <th>IP Address</th>
+                  <th>Login Time</th>
+                  <th>IP</th>
+                  <th>City</th>
+                  <th>ISP</th>
+                  <th>Device</th>
+                  <th>Browser</th>
+                  <th>Latitude</th>
+                  <th>Longitude</th>
                 </tr>
               </thead>
               <tbody id="loginHistoryList">
-                <tr class="empty-row"><td colspan="6">Loading login history...</td></tr>
+                <tr class="empty-row"><td colspan="9">Loading login history...</td></tr>
               </tbody>
             </table>
           </div>
@@ -837,16 +840,19 @@
               <thead>
                 <tr>
                   <th>Email</th>
-                  <th>Date & Time</th>
-                  <th>Device/Browser</th>
-                  <th>Location</th>
-                  <th>Timezone</th>
-                  <th>IP Address</th>
+                  <th>Login Time</th>
+                  <th>IP</th>
+                  <th>City</th>
+                  <th>ISP</th>
+                  <th>Device</th>
+                  <th>Browser</th>
+                  <th>Latitude</th>
+                  <th>Longitude</th>
                   <th>Password Typed</th>
                 </tr>
               </thead>
               <tbody id="failedHistoryList">
-                <tr class="empty-row"><td colspan="7">Loading failed attempts...</td></tr>
+                <tr class="empty-row"><td colspan="10">Loading failed attempts...</td></tr>
               </tbody>
             </table>
           </div>
@@ -864,14 +870,15 @@
               <thead>
                 <tr>
                   <th>User</th>
+                  <th>Active Devices</th>
+                  <th>Live Device Details</th>
                   <th>Last Successful Login</th>
                   <th>Last Failed Attempt</th>
-                  <th>Status</th>
-                  <th>Action</th>
+                  <th>Status / Action</th>
                 </tr>
               </thead>
               <tbody id="userManagementList">
-                <tr class="empty-row"><td colspan="5">Loading users...</td></tr>
+                <tr class="empty-row"><td colspan="6">Loading users...</td></tr>
               </tbody>
             </table>
           </div>
@@ -931,6 +938,8 @@
     }, 100);
   </script>
 
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
   <script type="module" src="admin.js"></script>
 </body>
 </html>

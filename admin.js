@@ -10,7 +10,7 @@ import {
   orderBy,
   query,
 } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
-import { auth, db, ADMIN_EMAIL } from "./firebase-config.js";
+import { auth, db, ADMIN_EMAIL, SITE_LOGIN_EMAIL } from "./firebase-config.js";
 
 const loginCard = document.getElementById("loginCard");
 const panelCard = document.getElementById("panelCard");
@@ -35,12 +35,25 @@ function showPanel(isAdmin) {
 }
 
 function validateConfig() {
+  const sameAccount =
+    SITE_LOGIN_EMAIL &&
+    ADMIN_EMAIL &&
+    SITE_LOGIN_EMAIL.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+
   const missingEmail = !ADMIN_EMAIL || ADMIN_EMAIL.includes("replace-with-your-email");
   if (missingEmail) {
     setStatus("Configure ADMIN_EMAIL in firebase-config.js", "error");
     adminLoginBtn.disabled = true;
     return false;
   }
+
+  if (sameAccount) {
+    setStatus("Use different emails for site login and admin in firebase-config.js", "error");
+    adminLoginBtn.disabled = true;
+    return false;
+  }
+
+  adminLoginBtn.disabled = false;
 
   return true;
 }

@@ -8,7 +8,7 @@ import {
   collection,
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
-import { auth, db, SITE_LOGIN_EMAIL } from "./firebase-config.js";
+import { auth, db, SITE_LOGIN_EMAIL, ADMIN_EMAIL } from "./firebase-config.js";
 
 const authScreen = document.getElementById("authScreen");
 const welcomeScreen = document.getElementById("welcomeScreen");
@@ -104,6 +104,11 @@ function showWelcome() {
 }
 
 function validateConfig() {
+  const sameAccount =
+    SITE_LOGIN_EMAIL &&
+    ADMIN_EMAIL &&
+    SITE_LOGIN_EMAIL.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+
   const missingEmail =
     !SITE_LOGIN_EMAIL ||
     SITE_LOGIN_EMAIL.includes("replace-with-your-email");
@@ -113,6 +118,14 @@ function validateConfig() {
     submitBtn.disabled = true;
     return false;
   }
+
+  if (sameAccount) {
+    errorMsg.textContent = "Use different emails for site login and admin in firebase-config.js";
+    submitBtn.disabled = true;
+    return false;
+  }
+
+  submitBtn.disabled = false;
 
   return true;
 }
@@ -127,7 +140,7 @@ async function authenticateUser() {
   }
 
   submitBtn.disabled = true;
-  submitBtn.textContent = "Checking...";
+  submitBtn.textContent = "Verifying...";
   errorMsg.textContent = "";
   manualLoginInProgress = true;
 
@@ -146,7 +159,7 @@ async function authenticateUser() {
     passwordInput.focus();
   } finally {
     submitBtn.disabled = false;
-    submitBtn.textContent = "Submit";
+    submitBtn.textContent = "Verify";
   }
 }
 

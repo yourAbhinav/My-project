@@ -644,16 +644,18 @@
       box-shadow: none;
       max-width: 460px;
       width: min(92vw, 460px);
+      position: relative;
+      overflow: visible;
     }
 
     .auth-box h2 {
-      color: var(--text);
+      color: #ffe9fb;
       font-family: "Playfair Display", Georgia, serif;
       font-size: 1.9rem;
       margin: 0 0 28px 0;
       letter-spacing: 1px;
       font-weight: 700;
-      text-shadow: 0 4px 12px rgba(48, 8, 45, 0.35);
+      text-shadow: 0 0 12px rgba(255, 255, 255, 0.4), 0 0 30px rgba(255, 78, 166, 0.55);
     }
 
     .auth-box input {
@@ -695,12 +697,62 @@
       transition: all 220ms ease;
       letter-spacing: 0.5px;
       box-shadow: 0 8px 20px rgba(240, 38, 127, 0.3);
+      position: relative;
     }
 
     .auth-box button:hover {
       background: linear-gradient(180deg, #ff8ac4, #e01875);
-      transform: translateY(-2px);
+      transform: translateY(-2px) scale(1.03);
       box-shadow: 0 12px 28px rgba(240, 38, 127, 0.45);
+    }
+
+    .auth-note {
+      margin: -12px 0 16px;
+      font-size: 0.95rem;
+      opacity: 0.95;
+      color: #fff1c7;
+      letter-spacing: 0.2px;
+      text-shadow: 0 0 10px rgba(255, 190, 90, 0.4);
+    }
+
+    .auth-butterflies {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      overflow: hidden;
+      z-index: 0;
+    }
+
+    .auth-butterfly {
+      position: absolute;
+      font-size: clamp(1.2rem, 3.2vw, 1.9rem);
+      opacity: 0.85;
+      filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.38));
+      animation: butterflyFloat var(--dur, 9s) ease-in-out infinite;
+      animation-delay: var(--delay, 0s);
+    }
+
+    .auth-butterfly:nth-child(1) { left: 8%; top: 16%; color: #ffd1ef; }
+    .auth-butterfly:nth-child(2) { left: 84%; top: 18%; color: #ffe8a7; }
+    .auth-butterfly:nth-child(3) { left: 14%; top: 72%; color: #c6f6ff; }
+    .auth-butterfly:nth-child(4) { left: 79%; top: 70%; color: #ffc5d7; }
+    .auth-butterfly:nth-child(5) { left: 49%; top: 8%; color: #fff4ca; }
+    .auth-butterfly:nth-child(6) { left: 52%; top: 84%; color: #e4d8ff; }
+
+    @keyframes butterflyFloat {
+      0%,
+      100% {
+        transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
+      }
+      25% {
+        transform: translate3d(10px, -16px, 0) rotate(7deg) scale(1.06);
+      }
+      50% {
+        transform: translate3d(-8px, -26px, 0) rotate(-5deg) scale(0.95);
+      }
+      75% {
+        transform: translate3d(14px, -12px, 0) rotate(6deg) scale(1.03);
+      }
     }
 
     .auth-box button:active {
@@ -841,10 +893,19 @@
 </head>
 <body>
   <div id="authScreen" class="auth-screen">
+    <div class="auth-butterflies" aria-hidden="true">
+      <span class="auth-butterfly" style="--dur: 9s; --delay: 0s;">🦋</span>
+      <span class="auth-butterfly" style="--dur: 10s; --delay: 1.2s;">🦋</span>
+      <span class="auth-butterfly" style="--dur: 8.4s; --delay: 0.7s;">🦋</span>
+      <span class="auth-butterfly" style="--dur: 11s; --delay: 2s;">🦋</span>
+      <span class="auth-butterfly" style="--dur: 9.8s; --delay: 1.8s;">🦋</span>
+      <span class="auth-butterfly" style="--dur: 10.4s; --delay: 0.3s;">🦋</span>
+    </div>
     <div class="auth-box">
       <h2>Enter Password</h2>
+      <p class="auth-note">This is for special person please verify</p>
       <input type="password" id="passwordInput" placeholder="Enter password" />
-      <button id="submitBtn">Submit</button>
+      <button id="submitBtn">Verify</button>
       <p id="errorMsg" class="error-msg"></p>
       <p style="margin-top: 10px; margin-bottom: 0; font-size: 0.88rem; opacity: 0.8;">
         Admin? Open <a href="admin.html" style="color: #fff;">admin panel</a>

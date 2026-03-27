@@ -10,7 +10,7 @@ const firebaseConfig = {
 };
 
 export const SITE_LOGIN_EMAIL = "testnow683@gmail.com";
-export const ADMIN_EMAIL = "testnow683@gmail.com";
+export const ADMIN_EMAIL = "abhinavkumar09870@gmail.com";
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);

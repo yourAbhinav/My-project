@@ -66,6 +66,36 @@
       align-items: flex-start;
     }
 
+    .change-song-btn {
+      position: fixed;
+      left: 50%;
+      bottom: calc(68px + env(safe-area-inset-bottom));
+      transform: translateX(-50%);
+      z-index: 7;
+      border: 1px solid rgba(121, 215, 255, 0.58);
+      background: rgba(16, 20, 34, 0.56);
+      color: #f5f7ff;
+      font-family: "Poppins", "Segoe UI", Tahoma, sans-serif;
+      font-size: 1.02rem;
+      font-weight: 600;
+      border-radius: 999px;
+      width: 42px;
+      height: 42px;
+      padding: 0;
+      cursor: pointer;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.34);
+      backdrop-filter: blur(8px);
+      transition: transform 180ms ease, background 180ms ease, border-color 180ms ease;
+    }
+
+    .change-song-btn:hover,
+    .change-song-btn:focus-visible {
+      transform: translateX(-50%) translateY(-1px);
+      background: rgba(22, 30, 52, 0.7);
+      border-color: rgba(121, 215, 255, 0.82);
+      outline: none;
+    }
+
     #soundRain {
       position: fixed;
       inset: 0;
@@ -331,6 +361,7 @@
   <canvas id="soundRain" aria-hidden="true"></canvas>
   <div id="loveShower" class="love-shower" aria-hidden="true"></div>
   <audio id="song" autoplay loop preload="auto"></audio>
+  <button id="changeSongBtn" class="change-song-btn" type="button" aria-label="Change Song" title="Change Song">&#9835;</button>
   <div id="tapHint" class="tap-hint" aria-live="polite">Tap anywhere to play music</div>
 
   <main class="shell">
@@ -392,14 +423,27 @@
       "Mere Nishaan.aan.aaa",
     ];
 
-    const SYNC_STORAGE_KEY = "mereNishanLyricsSyncV1";
-    const AUDIO_FILE_NAME = "Mere Nishan✨.mp3";
+    const SYNC_STORAGE_KEY_BASE = "mereNishanLyricsSyncV1";
+    const SONG_OPTIONS = [
+      {
+        label: "Mere Nishan",
+        fileName: "Mere Nishan✨.mp3",
+        backgroundImage: "6064406445593575386_121.jpg",
+      },
+      {
+        label: "Mere Nishann",
+        fileName: "Mere Nishann✨.mp3",
+        backgroundImage: "component.jpg",
+      },
+    ];
     let LYRICS = [];
 
     const songEl = document.getElementById("song");
     const rainCanvas = document.getElementById("soundRain");
     const rainCtx = rainCanvas.getContext("2d");
     const tapHintEl = document.getElementById("tapHint");
+    const changeSongBtn = document.getElementById("changeSongBtn");
+    const songBgImageEl = document.getElementById("songBgImage");
     const lineEls = [
       document.getElementById("line0"),
       document.getElementById("line1"),
@@ -407,6 +451,7 @@
       document.getElementById("line3"),
     ];
 
+    let currentSongIndex = 0;
     let audioSourceCandidates = [];
     let audioSourceIndex = 0;
 
@@ -476,6 +521,41 @@
       ].filter(Boolean);
 
       return Array.from(new Set(forms));
+    }
+
+    function getCurrentSong() {
+      return SONG_OPTIONS[currentSongIndex] || SONG_OPTIONS[0];
+    }
+
+    function getSongSyncStorageKey() {
+      const song = getCurrentSong();
+      const suffix = song && song.fileName ? song.fileName : "default";
+      return SYNC_STORAGE_KEY_BASE + "::" + suffix;
+    }
+
+    function refreshChangeSongButtonLabel() {
+      if (!changeSongBtn) return;
+      const nextSong = SONG_OPTIONS[(currentSongIndex + 1) % SONG_OPTIONS.length];
+      const label = "Change song to " + nextSong.label;
+      changeSongBtn.title = label;
+      changeSongBtn.setAttribute("aria-label", label);
+      changeSongBtn.innerHTML = "&#9835;";
+    }
+
+    function applySong(index) {
+      const normalized = ((index % SONG_OPTIONS.length) + SONG_OPTIONS.length) % SONG_OPTIONS.length;
+      const song = SONG_OPTIONS[normalized];
+      currentSongIndex = normalized;
+
+      audioSourceCandidates = buildAudioSourceCandidates(song.fileName);
+      audioSourceIndex = 0;
+      setAudioSource(0);
+
+      currentGroupStart = -4;
+      previousActiveIndex = -1;
+      initializeTimeline();
+      updateLyrics();
+      refreshChangeSongButtonLabel();
     }
 
     function setAudioSource(index) {
@@ -724,7 +804,7 @@
 
     function readSavedTimeline() {
       try {
-        const raw = localStorage.getItem(SYNC_STORAGE_KEY);
+        const raw = localStorage.getItem(getSongSyncStorageKey());
         if (!raw) return null;
         const parsed = JSON.parse(raw);
         if (!Array.isArray(parsed) || parsed.length !== LYRIC_LINES.length) return null;
@@ -894,6 +974,23 @@
     songEl.addEventListener("seeking", () => updateLyrics());
     songEl.addEventListener("seeked", () => updateLyrics());
 
+    if (changeSongBtn) {
+      changeSongBtn.addEventListener("click", () => {
+        const wasPlaying = !songEl.paused && !songEl.ended;
+        const nextIndex = (currentSongIndex + 1) % SONG_OPTIONS.length;
+        applySong(nextIndex);
+        songEl.currentTime = 0;
+
+        if (tapHintEl) {
+          tapHintEl.textContent = "Now playing: " + getCurrentSong().label;
+        }
+
+        if (wasPlaying) {
+          attemptAutoplay();
+        }
+      });
+    }
+
     function tryUnlockAutoplay() {
       if (!songEl.paused) return;
       setTapHintVisible(false);
@@ -922,10 +1019,8 @@
       document.body.classList.add("page-entered");
     });
 
-    audioSourceCandidates = buildAudioSourceCandidates(AUDIO_FILE_NAME);
-    setAudioSource(0);
+    applySong(0);
 
-    initializeTimeline();
     resizeRainCanvas();
     seedRainDrops();
     updateLyrics();

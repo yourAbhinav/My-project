@@ -5,10 +5,14 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
 import {
   collection,
+  doc,
   getDocs,
   limit,
+  onSnapshot,
   orderBy,
   query,
+  serverTimestamp,
+  setDoc,
 } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
 import { auth, db, ADMIN_EMAIL, SITE_LOGIN_EMAIL } from "./firebase-config.js";
 
@@ -24,10 +28,17 @@ const loginHistoryList = document.getElementById("loginHistoryList");
 const failedHistoryList = document.getElementById("failedHistoryList");
 const tableSearch = document.getElementById("tableSearch");
 const downloadCsvBtn = document.getElementById("downloadCsvBtn");
+const refreshDataBtn = document.getElementById("refreshDataBtn");
+const forceLogoutAllBtn = document.getElementById("forceLogoutAllBtn");
+const userManagementList = document.getElementById("userManagementList");
 const loginStatusInline = document.getElementById("loginStatusInline");
 let manualAdminLoginInProgress = false;
 let latestLoginEntries = [];
 let latestFailedEntries = [];
+const SESSION_CONTROL_COLLECTION = "sessionControl";
+const SESSION_CONTROL_DOC = "global";
+const SESSION_LOGOUT_VERSION_KEY = "securityHubLogoutVersion";
+let sessionWatcherInitialized = false;
 
 function setStatus(message, type) {
   loginStatus.textContent = message || "";
@@ -86,6 +97,19 @@ function formatLoginTime(data) {
 
   if (!dateObj) return "Unknown time";
   return dateObj.toLocaleString();
+}
+
+function getLoginDate(data) {
+  if (data && data.loginAt && typeof data.loginAt.toDate === "function") {
+    return data.loginAt.toDate();
+  }
+
+  if (data && data.localLoginAt) {
+    const parsed = new Date(data.localLoginAt);
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+  }
+
+  return null;
 }
 
 function safeText(value) {
@@ -174,6 +198,111 @@ function formatFailedTime(data) {
 
   if (!dateObj) return "Unknown time";
   return dateObj.toLocaleString();
+}
+
+function getFailedDate(data) {
+  if (data && data.failedAt && typeof data.failedAt.toDate === "function") {
+    return data.failedAt.toDate();
+  }
+
+  if (data && data.localFailedAt) {
+    const parsed = new Date(data.localFailedAt);
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+  }
+
+  return null;
+}
+
+function getStoredLogoutVersion() {
+  const raw = localStorage.getItem(SESSION_LOGOUT_VERSION_KEY);
+  const parsed = Number(raw || 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function setStoredLogoutVersion(version) {
+  localStorage.setItem(SESSION_LOGOUT_VERSION_KEY, String(version || 0));
+}
+
+function deriveUserManagementRows() {
+  const users = new Map();
+
+  latestLoginEntries.forEach((item) => {
+    const email = (item.email || "Unknown user").trim() || "Unknown user";
+    const current = users.get(email) || {
+      email,
+      lastSuccess: null,
+      lastFailed: null,
+    };
+    const date = getLoginDate(item);
+    if (!current.lastSuccess || (date && date > current.lastSuccess.date)) {
+      current.lastSuccess = {
+        date,
+        label: formatLoginTime(item),
+      };
+    }
+    users.set(email, current);
+  });
+
+  latestFailedEntries.forEach((item) => {
+    const email = (item.email || "Unknown user").trim() || "Unknown user";
+    const current = users.get(email) || {
+      email,
+      lastSuccess: null,
+      lastFailed: null,
+    };
+    const date = getFailedDate(item);
+    if (!current.lastFailed || (date && date > current.lastFailed.date)) {
+      current.lastFailed = {
+        date,
+        label: formatFailedTime(item),
+      };
+    }
+    users.set(email, current);
+  });
+
+  return Array.from(users.values()).sort((a, b) => {
+    const aTime = Math.max(
+      a.lastSuccess && a.lastSuccess.date ? a.lastSuccess.date.getTime() : 0,
+      a.lastFailed && a.lastFailed.date ? a.lastFailed.date.getTime() : 0
+    );
+    const bTime = Math.max(
+      b.lastSuccess && b.lastSuccess.date ? b.lastSuccess.date.getTime() : 0,
+      b.lastFailed && b.lastFailed.date ? b.lastFailed.date.getTime() : 0
+    );
+    return bTime - aTime;
+  });
+}
+
+function renderUserManagement() {
+  if (!userManagementList) return;
+
+  const rows = deriveUserManagementRows();
+  if (!rows.length) {
+    userManagementList.innerHTML = "<tr class=\"empty-row\"><td colspan=\"4\">No users found from current logs.</td></tr>";
+    return;
+  }
+
+  const now = Date.now();
+  const activeWindowMs = 24 * 60 * 60 * 1000;
+
+  userManagementList.innerHTML = rows.map((row) => {
+    const successLabel = row.lastSuccess ? row.lastSuccess.label : "No successful login";
+    const failedLabel = row.lastFailed ? row.lastFailed.label : "No failed attempt";
+    const lastSeenMs = Math.max(
+      row.lastSuccess && row.lastSuccess.date ? row.lastSuccess.date.getTime() : 0,
+      row.lastFailed && row.lastFailed.date ? row.lastFailed.date.getTime() : 0
+    );
+    const isActive = lastSeenMs > 0 && now - lastSeenMs <= activeWindowMs;
+    const statusClass = isActive ? "user-chip" : "user-chip inactive";
+    const statusText = isActive ? "Active (24h)" : "Inactive";
+
+    return "<tr>"
+      + "<td>" + safeText(row.email) + "</td>"
+      + "<td>" + safeText(successLabel) + "</td>"
+      + "<td>" + safeText(failedLabel) + "</td>"
+      + "<td><span class=\"" + statusClass + "\">" + safeText(statusText) + "</span></td>"
+      + "</tr>";
+  }).join("");
 }
 
 function renderFailedHistory(entries) {
@@ -294,6 +423,74 @@ function downloadCsvFile() {
 function rerenderTables() {
   renderLoginHistory(latestLoginEntries);
   renderFailedHistory(latestFailedEntries);
+  renderUserManagement();
+}
+
+async function refreshDashboardData() {
+  if (refreshDataBtn) refreshDataBtn.disabled = true;
+  if (forceLogoutAllBtn) forceLogoutAllBtn.disabled = true;
+
+  try {
+    setStatus("Refreshing data...", "ok");
+    await Promise.all([loadLoginHistory(), loadFailedHistory()]);
+    renderUserManagement();
+    setStatus("Dashboard refreshed.", "ok");
+  } finally {
+    if (refreshDataBtn) refreshDataBtn.disabled = false;
+    if (forceLogoutAllBtn) forceLogoutAllBtn.disabled = false;
+  }
+}
+
+async function publishForcedLogout(reason) {
+  const nextVersion = Date.now();
+
+  await setDoc(
+    doc(db, SESSION_CONTROL_COLLECTION, SESSION_CONTROL_DOC),
+    {
+      logoutVersion: nextVersion,
+      reason: reason || "Session ended by admin.",
+      updatedBy: (auth.currentUser && auth.currentUser.email) || "unknown",
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
+
+  setStoredLogoutVersion(nextVersion);
+  return nextVersion;
+}
+
+function initializeSessionLogoutWatcher() {
+  const controlDocRef = doc(db, SESSION_CONTROL_COLLECTION, SESSION_CONTROL_DOC);
+
+  onSnapshot(
+    controlDocRef,
+    async (snapshot) => {
+      const data = snapshot.data() || {};
+      const remoteVersion = Number(data.logoutVersion || 0);
+      const localVersion = getStoredLogoutVersion();
+
+      if (!sessionWatcherInitialized) {
+        setStoredLogoutVersion(Math.max(localVersion, remoteVersion));
+        sessionWatcherInitialized = true;
+        return;
+      }
+
+      if (!remoteVersion || remoteVersion <= localVersion) return;
+
+      setStoredLogoutVersion(remoteVersion);
+
+      if (!auth.currentUser) return;
+
+      manualAdminLoginInProgress = false;
+      await signOut(auth).catch(() => {});
+      showPanel(false);
+      adminPass.value = "";
+      setStatus("You were logged out from another device.", "error");
+    },
+    () => {
+      // Keep dashboard usable even if watcher cannot attach.
+    }
+  );
 }
 
 async function loadLoginHistory() {
@@ -348,6 +545,29 @@ if (downloadCsvBtn) {
   downloadCsvBtn.addEventListener("click", downloadCsvFile);
 }
 
+if (refreshDataBtn) {
+  refreshDataBtn.addEventListener("click", refreshDashboardData);
+}
+
+if (forceLogoutAllBtn) {
+  forceLogoutAllBtn.addEventListener("click", async () => {
+    if (!auth.currentUser) {
+      setStatus("Sign in as admin to manage sessions.", "error");
+      return;
+    }
+
+    forceLogoutAllBtn.disabled = true;
+    try {
+      await publishForcedLogout("Forced logout triggered from user management.");
+      setStatus("Forced logout signal sent to all devices.", "ok");
+    } catch {
+      setStatus("Could not trigger global logout. Check Firestore rules.", "error");
+    } finally {
+      forceLogoutAllBtn.disabled = false;
+    }
+  });
+}
+
 adminLoginBtn.addEventListener("click", async () => {
   if (!validateConfig()) return;
 
@@ -375,8 +595,7 @@ adminLoginBtn.addEventListener("click", async () => {
     setStatus("Admin login successful.", "ok");
     adminInfo.textContent = "Logged in as: " + credential.user.email + " (admin)";
     showPanel(true);
-    await loadLoginHistory();
-    await loadFailedHistory();
+    await refreshDashboardData();
   } catch (err) {
     manualAdminLoginInProgress = false;
     const message = err && err.code === "auth/invalid-credential"
@@ -393,6 +612,15 @@ adminPass.addEventListener("keypress", (e) => {
 });
 
 logoutBtn.addEventListener("click", async () => {
+  let sentGlobalLogout = false;
+
+  try {
+    await publishForcedLogout("Admin logged out and ended active sessions.");
+    sentGlobalLogout = true;
+  } catch {
+    // Fall back to local logout if shared-session signal fails.
+  }
+
   try {
     await signOut(auth);
   } catch {
@@ -400,7 +628,12 @@ logoutBtn.addEventListener("click", async () => {
   }
 
   showPanel(false);
-  setStatus("Logged out.", "ok");
+  setStatus(
+    sentGlobalLogout
+      ? "Logged out. Other devices will be signed out too."
+      : "Logged out only on this device. Could not notify other devices.",
+    sentGlobalLogout ? "ok" : "error"
+  );
   adminPass.value = "";
 });
 
@@ -436,6 +669,7 @@ onAuthStateChanged(auth, async (user) => {
 
   adminInfo.textContent = "Logged in as: " + user.email + " (admin)";
   showPanel(true);
-  await loadLoginHistory();
-  await loadFailedHistory();
+  await refreshDashboardData();
 });
+
+initializeSessionLogoutWatcher();

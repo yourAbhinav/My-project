@@ -427,6 +427,33 @@
       box-shadow: 0 0 20px rgba(0, 217, 255, 0.4);
     }
 
+    .btn-refresh {
+      border: 1px solid rgba(255, 107, 53, 0.4);
+      border-radius: 8px;
+      padding: 10px 16px;
+      font-weight: 700;
+      color: #ffd0bf;
+      background: rgba(255, 107, 53, 0.12);
+      cursor: pointer;
+      transition: all 0.3s ease;
+      font-size: 0.9rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .btn-refresh:hover {
+      background: rgba(255, 107, 53, 0.22);
+      box-shadow: 0 0 20px rgba(255, 107, 53, 0.35);
+    }
+
+    .btn-refresh:disabled,
+    .btn-csv:disabled,
+    .btn-danger:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
     .status-inline {
       width: 100%;
       margin-top: 4px;
@@ -478,6 +505,12 @@
       border-top: 2px solid var(--neon-red);
     }
 
+    .table-card.management {
+      grid-column: 1 / -1;
+      border-top: 2px solid var(--neon-orange);
+      animation: none;
+    }
+
     .card-head {
       padding: 16px 18px;
       border-bottom: 1px solid rgba(0, 217, 255, 0.1);
@@ -497,6 +530,68 @@
       text-shadow: 0 0 10px rgba(255, 23, 68, 0.3);
       background: rgba(255, 23, 68, 0.05);
       border-bottom: 1px solid rgba(255, 23, 68, 0.1);
+    }
+
+    .table-card.management .card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      color: #ffd4c4;
+      text-shadow: 0 0 10px rgba(255, 107, 53, 0.25);
+      background: rgba(255, 107, 53, 0.08);
+      border-bottom: 1px solid rgba(255, 107, 53, 0.15);
+    }
+
+    .card-head-title {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card-head-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .btn-danger {
+      border: 1px solid rgba(255, 23, 68, 0.4);
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-weight: 700;
+      color: #ffd9e2;
+      background: rgba(255, 23, 68, 0.13);
+      cursor: pointer;
+      transition: all 0.3s ease;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+
+    .btn-danger:hover {
+      background: rgba(255, 23, 68, 0.25);
+      box-shadow: 0 0 20px rgba(255, 23, 68, 0.3);
+    }
+
+    .user-chip {
+      display: inline-block;
+      border: 1px solid rgba(0, 217, 255, 0.35);
+      border-radius: 999px;
+      padding: 4px 10px;
+      color: var(--neon-cyan);
+      font-weight: 700;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      background: rgba(0, 217, 255, 0.1);
+    }
+
+    .user-chip.inactive {
+      border-color: rgba(160, 175, 201, 0.35);
+      color: var(--text-muted);
+      background: rgba(160, 175, 201, 0.1);
     }
 
     .table-wrap {
@@ -677,6 +772,7 @@
 
         <div class="toolbar">
           <input id="tableSearch" class="search" type="search" placeholder="🔍 Search logs by email, device, location..." />
+          <button id="refreshDataBtn" class="btn-refresh" type="button">↻ Refresh</button>
           <button id="downloadCsvBtn" class="btn-csv" type="button">⬇ Download CSV</button>
           <div id="loginStatusInline" class="status-inline" aria-live="polite"></div>
         </div>
@@ -725,6 +821,30 @@
             </table>
           </div>
         </article>
+
+        <article class="table-card management">
+          <div class="card-head">
+            <span class="card-head-title">◎ User Management</span>
+            <span class="card-head-actions">
+              <button id="forceLogoutAllBtn" class="btn-danger" type="button">Force Logout All Devices</button>
+            </span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>User</th>
+                  <th>Last Successful Login</th>
+                  <th>Last Failed Attempt</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="userManagementList">
+                <tr class="empty-row"><td colspan="4">Loading users...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
       </section>
 
       <footer class="footer">Showing latest 50 records</footer>
@@ -758,13 +878,13 @@
     }
 
     // Initialize streams when dashboard is shown
-    const originalHidden = Object.getOwnPropertyDescriptor(Element.prototype, 'hidden').set;
     const dashboardCard = document.getElementById('panelCard');
+    const streamsContainer = document.getElementById('neonStreamsContainer');
     
     if (dashboardCard) {
       // Initialize streams once when dashboard loads
       const observer = new MutationObserver(() => {
-        if (!dashboardCard.classList.contains('hidden') && container.children.length === 0) {
+        if (!dashboardCard.classList.contains('hidden') && streamsContainer && streamsContainer.children.length === 0) {
           initializeNeonStreams();
         }
       });

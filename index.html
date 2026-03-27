@@ -249,7 +249,90 @@
       background: linear-gradient(180deg, #f4f0f3, #dfd7de);
       color: #7f4f69;
       position: relative;
-      transition: transform 620ms cubic-bezier(0.2, 0.9, 0.2, 1), left 620ms cubic-bezier(0.2, 0.9, 0.2, 1), top 620ms cubic-bezier(0.2, 0.9, 0.2, 1), box-shadow 280ms ease;
+      isolation: isolate;
+      overflow: visible;
+      clip-path: polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%);
+      transition: opacity 620ms ease-in, filter 620ms ease-in, box-shadow 280ms ease;
+    }
+
+    .btn-no:active {
+      transform: none;
+    }
+
+    .btn-no::before,
+    .btn-no::after {
+      content: "";
+      position: absolute;
+      inset: -14px;
+      border-radius: 24px;
+      pointer-events: none;
+      opacity: 0;
+      transform: scale(0.5);
+    }
+
+    .btn-no .burst-spread {
+      position: absolute;
+      inset: -170px;
+      border-radius: 999px;
+      pointer-events: none;
+      opacity: 0;
+      transform: scale(0.25);
+      background:
+        radial-gradient(circle at 35% 35%, rgba(255, 95, 152, 0.56), transparent 42%),
+        radial-gradient(circle at 72% 30%, rgba(104, 228, 255, 0.5), transparent 44%),
+        radial-gradient(circle at 52% 74%, rgba(255, 214, 102, 0.46), transparent 48%);
+      filter: blur(10px) saturate(1.2);
+      z-index: -1;
+    }
+
+    .btn-no.burst {
+      animation: noBurstKick 430ms cubic-bezier(0.2, 0.85, 0.3, 1);
+      box-shadow:
+        0 0 0 2px rgba(255, 255, 255, 0.4),
+        0 0 32px rgba(255, 59, 149, 0.72),
+        0 0 54px rgba(68, 210, 255, 0.62),
+        0 14px 26px rgba(48, 8, 45, 0.38);
+      filter: saturate(1.6) contrast(1.04);
+    }
+
+    .btn-no.burst::before {
+      background: conic-gradient(
+        from 0deg,
+        #ff365f,
+        #ffbf44,
+        #4ad8ff,
+        #7b61ff,
+        #31d7a0,
+        #ff365f
+      );
+      filter: blur(12px);
+      animation: noRingBurst 430ms ease-out forwards;
+    }
+
+    .btn-no.burst::after {
+      background:
+        radial-gradient(circle at 14% 20%, rgba(255, 71, 128, 0.96) 0 3px, transparent 4px),
+        radial-gradient(circle at 32% 8%, rgba(255, 200, 88, 0.96) 0 3px, transparent 4px),
+        radial-gradient(circle at 52% 18%, rgba(111, 224, 255, 0.96) 0 3px, transparent 4px),
+        radial-gradient(circle at 76% 14%, rgba(161, 132, 255, 0.96) 0 3px, transparent 4px),
+        radial-gradient(circle at 90% 28%, rgba(75, 255, 190, 0.96) 0 3px, transparent 4px),
+        radial-gradient(circle at 12% 56%, rgba(255, 118, 203, 0.96) 0 3px, transparent 4px),
+        radial-gradient(circle at 34% 72%, rgba(255, 232, 110, 0.96) 0 3px, transparent 4px),
+        radial-gradient(circle at 58% 84%, rgba(117, 232, 255, 0.96) 0 3px, transparent 4px),
+        radial-gradient(circle at 82% 74%, rgba(198, 160, 255, 0.96) 0 3px, transparent 4px),
+        radial-gradient(circle at 94% 56%, rgba(255, 255, 255, 0.96) 0 2px, transparent 3px);
+      animation: noSparkBurst 430ms ease-out forwards;
+    }
+
+    .btn-no.burst .burst-spread {
+      animation: noColorSpread 430ms cubic-bezier(0.18, 0.8, 0.26, 1) forwards;
+    }
+
+    .btn-no.vanish {
+      opacity: 0;
+      transform: none;
+      filter: blur(2px) brightness(1.12);
+      pointer-events: none;
     }
 
     .question-screen {
@@ -304,6 +387,11 @@
 
     .question-screen.active .btn-no {
       animation: noWiggle 1.2s ease-in-out infinite;
+    }
+
+    .question-screen.active .btn-no.burst,
+    .question-screen.active .btn-no.vanish {
+      animation: none;
     }
 
     .question-screen .btn-no.moving {
@@ -595,6 +683,67 @@
       }
       100% {
         transform: scale(1) rotate(0deg);
+      }
+    }
+
+    @keyframes noBurstKick {
+      0% {
+        transform: translateY(0);
+        filter: saturate(1) hue-rotate(0deg);
+      }
+      30% {
+        transform: translateY(0);
+        filter: saturate(1.7) hue-rotate(18deg);
+      }
+      62% {
+        transform: translateY(0);
+        filter: saturate(1.8) hue-rotate(-14deg);
+      }
+      100% {
+        transform: translateY(0);
+        filter: saturate(1) hue-rotate(0deg);
+      }
+    }
+
+    @keyframes noRingBurst {
+      0% {
+        opacity: 0;
+        transform: scale(0.45);
+      }
+      34% {
+        opacity: 0.96;
+      }
+      100% {
+        opacity: 0;
+        transform: scale(1.8);
+      }
+    }
+
+    @keyframes noSparkBurst {
+      0% {
+        opacity: 0;
+        transform: scale(0.35);
+      }
+      40% {
+        opacity: 1;
+      }
+      100% {
+        opacity: 0;
+        transform: scale(2.1);
+      }
+    }
+
+    @keyframes noColorSpread {
+      0% {
+        opacity: 0;
+        transform: scale(0.25);
+      }
+      28% {
+        opacity: 0.95;
+      }
+      100% {
+        opacity: 0;
+        transform: scale(1.12);
       }
     }
 

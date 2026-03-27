@@ -231,12 +231,12 @@ const QuestionScreen = React.memo(function QuestionScreen({
   active,
   heartsRef,
   questionText,
-  buttonRowRef,
-  noBtnRef,
   onYes,
   onNo,
-  noMoving,
-  noPos,
+  onNoTransitionEnd,
+  noBursting,
+  noVanishing,
+  noGone,
   yesClicked,
 }) {
   return (
@@ -246,20 +246,22 @@ const QuestionScreen = React.memo(function QuestionScreen({
         <p className="script-title" style={{ fontSize: "clamp(2.1rem, 7vw, 4rem)", marginBottom: "12px" }}>
           {questionText}
         </p>
-        <div className="button-row" ref={buttonRowRef}>
+        <div className="button-row">
           <button className="btn btn-yes" onClick={onYes} disabled={yesClicked}>
             YES 💖
           </button>
-          <button
-            id="noBtn"
-            ref={noBtnRef}
-            className={"btn btn-no" + (noMoving ? " moving" : "")}
-            onClick={onNo}
-            disabled={yesClicked}
-            style={{ transform: `translate(${noPos.x}px, ${noPos.y}px)`, opacity: yesClicked ? 0.45 : 1 }}
-          >
-            NO 😢
-          </button>
+          {!noGone && (
+            <button
+              id="noBtn"
+              className={"btn btn-no" + (noBursting ? " burst" : "") + (noVanishing ? " vanish" : "")}
+              onClick={onNo}
+              onTransitionEnd={onNoTransitionEnd}
+              disabled={yesClicked || noBursting || noVanishing}
+            >
+              <span className="burst-spread" aria-hidden="true"></span>
+              NO 😢
+            </button>
+          )}
         </div>
       </div>
     </section>
@@ -286,8 +288,9 @@ const FinalScreen = React.memo(function FinalScreen({ active, heartsRef, quote, 
 function App() {
   const [screen, setScreen] = useState("intro");
   const [yesClicked, setYesClicked] = useState(false);
-  const [noPos, setNoPos] = useState({ x: 0, y: 0 });
-  const [noMoving, setNoMoving] = useState(false);
+  const [noBursting, setNoBursting] = useState(false);
+  const [noVanishing, setNoVanishing] = useState(false);
+  const [noGone, setNoGone] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
 
   const finalSongRef = useRef(null);
@@ -296,9 +299,8 @@ function App() {
   const loveHeartsRef = useRef(null);
   const questionHeartsRef = useRef(null);
   const finalHeartsRef = useRef(null);
-  const buttonRowRef = useRef(null);
-  const noBtnRef = useRef(null);
-  const noMoveTimerRef = useRef(0);
+  const noBurstTimerRef = useRef(0);
+  const noVanishTimerRef = useRef(0);
   const stopActiveHeartsRef = useRef(() => {});
 
   const introText = useMemo(() => CONFIG.INTRO_TEXT.replace("Bhanu", CONFIG.HER_NAME), []);
@@ -344,75 +346,28 @@ function App() {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  const triggerNoMoveAnimation = useCallback(() => {
-    setNoMoving(true);
-    if (noMoveTimerRef.current) {
-      clearTimeout(noMoveTimerRef.current);
-    }
-    noMoveTimerRef.current = window.setTimeout(() => {
-      setNoMoving(false);
-      noMoveTimerRef.current = 0;
-    }, 260);
-  }, []);
-
   useEffect(() => {
-    return () => {
-      if (noMoveTimerRef.current) clearTimeout(noMoveTimerRef.current);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (screen !== "question" || yesClicked) return;
-
-    let noMoveCooldown = 0;
-
-    const handlePointerMove = (pointer) => {
-      if (screen !== "question" || yesClicked || !buttonRowRef.current) return;
-
-      const now = performance.now();
-      const cooldown = LOW_END_PROFILE ? 90 : 40;
-      if (now - noMoveCooldown < cooldown) return;
-      noMoveCooldown = now;
-
-      const noBtn = noBtnRef.current;
-      if (!noBtn) return;
-
-      const noRect = noBtn.getBoundingClientRect();
-      const centerX = noRect.left + noRect.width / 2;
-      const centerY = noRect.top + noRect.height / 2;
-      const dist = Math.hypot(pointer.clientX - centerX, pointer.clientY - centerY);
-
-      if (dist > 170) return;
-
-      const rowRect = buttonRowRef.current.getBoundingClientRect();
-      const maxShiftX = Math.max(120, rowRect.width * 0.42);
-      const maxShiftY = Math.max(68, rowRect.height * 0.75);
-      const dirX = pointer.clientX > centerX ? -1 : 1;
-      const shiftX = dirX * randomBetween(86, maxShiftX);
-      const shiftY = randomBetween(-maxShiftY, maxShiftY);
-
-      setNoPos((prev) => ({
-        x: clamp(prev.x + shiftX, -maxShiftX, maxShiftX),
-        y: clamp(prev.y + shiftY, -maxShiftY, maxShiftY),
-      }));
-      triggerNoMoveAnimation();
-    };
-
-    const onMouseMove = (e) => handlePointerMove(e);
-    const onTouchStart = (e) => {
-      if (e.touches && e.touches[0]) {
-        handlePointerMove(e.touches[0]);
+    if (screen === "question") {
+      if (noBurstTimerRef.current) {
+        clearTimeout(noBurstTimerRef.current);
+        noBurstTimerRef.current = 0;
       }
-    };
+      if (noVanishTimerRef.current) {
+        clearTimeout(noVanishTimerRef.current);
+        noVanishTimerRef.current = 0;
+      }
+      setNoBursting(false);
+      setNoVanishing(false);
+      setNoGone(false);
+    }
+  }, [screen]);
 
-    document.body.addEventListener("mousemove", onMouseMove, { passive: true });
-    document.body.addEventListener("touchstart", onTouchStart, { passive: true });
-
+  useEffect(() => {
     return () => {
-      document.body.removeEventListener("mousemove", onMouseMove);
-      document.body.removeEventListener("touchstart", onTouchStart);
+      if (noBurstTimerRef.current) clearTimeout(noBurstTimerRef.current);
+      if (noVanishTimerRef.current) clearTimeout(noVanishTimerRef.current);
     };
-  }, [screen, yesClicked, triggerNoMoveAnimation]);
+  }, []);
 
   const goToLovePage = useCallback(() => {
     if (screen === "message") setScreen("love");
@@ -432,20 +387,32 @@ function App() {
     });
   }, [yesClicked]);
 
-  const handleNoClick = useCallback((e) => {
-    e.preventDefault();
-    if (!buttonRowRef.current) return;
+  const handleNoClick = useCallback(() => {
+    if (yesClicked || noBursting || noVanishing || noGone) return;
 
-    const rowRect = buttonRowRef.current.getBoundingClientRect();
-    const maxShiftX = Math.max(120, rowRect.width * 0.42);
-    const maxShiftY = Math.max(68, rowRect.height * 0.75);
+    setNoBursting(true);
 
-    setNoPos((prev) => ({
-      x: clamp(prev.x + randomBetween(-maxShiftX, maxShiftX), -maxShiftX, maxShiftX),
-      y: clamp(prev.y + randomBetween(-maxShiftY, maxShiftY), -maxShiftY, maxShiftY),
-    }));
-    triggerNoMoveAnimation();
-  }, [triggerNoMoveAnimation]);
+    noBurstTimerRef.current = window.setTimeout(() => {
+      setNoBursting(false);
+      setNoVanishing(true);
+      noBurstTimerRef.current = 0;
+
+      // Fallback if transitionend misses on some browsers.
+      noVanishTimerRef.current = window.setTimeout(() => {
+        setNoGone(true);
+        noVanishTimerRef.current = 0;
+      }, 760);
+    }, 430);
+  }, [yesClicked, noBursting, noVanishing, noGone]);
+
+  const handleNoTransitionEnd = useCallback((e) => {
+    if (!noVanishing || e.propertyName !== "opacity") return;
+    if (noVanishTimerRef.current) {
+      clearTimeout(noVanishTimerRef.current);
+      noVanishTimerRef.current = 0;
+    }
+    setNoGone(true);
+  }, [noVanishing]);
 
   const handleSongToggle = useCallback((e) => {
     e.stopPropagation();
@@ -485,12 +452,12 @@ function App() {
         active={screen === "question"}
         heartsRef={questionHeartsRef}
         questionText={CONFIG.QUESTION_TEXT}
-        buttonRowRef={buttonRowRef}
-        noBtnRef={noBtnRef}
         onYes={handleYesClick}
         onNo={handleNoClick}
-        noMoving={noMoving}
-        noPos={noPos}
+        onNoTransitionEnd={handleNoTransitionEnd}
+        noBursting={noBursting}
+        noVanishing={noVanishing}
+        noGone={noGone}
         yesClicked={yesClicked}
       />
 

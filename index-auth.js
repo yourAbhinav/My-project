@@ -6,6 +6,8 @@ import {
 import {
   addDoc,
   collection,
+  doc,
+  onSnapshot,
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
 import { auth, db, SITE_LOGIN_EMAIL, ADMIN_EMAIL } from "./firebase-config.js";
@@ -18,6 +20,52 @@ const submitBtn = document.getElementById("submitBtn");
 const errorMsg = document.getElementById("errorMsg");
 const continueBtn = document.getElementById("continueBtn");
 let manualLoginInProgress = false;
+const SESSION_CONTROL_COLLECTION = "sessionControl";
+const SESSION_CONTROL_DOC = "global";
+const SESSION_LOGOUT_VERSION_KEY = "securityHubLogoutVersion";
+let sessionWatcherInitialized = false;
+
+function getStoredLogoutVersion() {
+  const raw = localStorage.getItem(SESSION_LOGOUT_VERSION_KEY);
+  const parsed = Number(raw || 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function setStoredLogoutVersion(version) {
+  localStorage.setItem(SESSION_LOGOUT_VERSION_KEY, String(version || 0));
+}
+
+function initializeSessionLogoutWatcher() {
+  const controlDocRef = doc(db, SESSION_CONTROL_COLLECTION, SESSION_CONTROL_DOC);
+
+  onSnapshot(
+    controlDocRef,
+    async (snapshot) => {
+      const data = snapshot.data() || {};
+      const remoteVersion = Number(data.logoutVersion || 0);
+      const localVersion = getStoredLogoutVersion();
+
+      if (!sessionWatcherInitialized) {
+        setStoredLogoutVersion(Math.max(localVersion, remoteVersion));
+        sessionWatcherInitialized = true;
+        return;
+      }
+
+      if (!remoteVersion || remoteVersion <= localVersion) return;
+
+      setStoredLogoutVersion(remoteVersion);
+      if (!auth.currentUser) return;
+
+      manualLoginInProgress = false;
+      await signOut(auth).catch(() => {});
+      showAuth();
+      errorMsg.textContent = "Your session was ended from another device. Please log in again.";
+    },
+    () => {
+      // Keep auth flow active even if watcher cannot attach.
+    }
+  );
+}
 
 function getDeviceName() {
   const ua = navigator.userAgent || "";
@@ -254,3 +302,4 @@ passwordInput.addEventListener("keypress", (e) => {
 });
 
 passwordInput.focus();
+initializeSessionLogoutWatcher();

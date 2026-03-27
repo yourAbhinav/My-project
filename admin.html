@@ -24,6 +24,9 @@
       --text-muted: #a0afc9;
       --status-ok: #00d9ff;
       --status-error: #ff1744;
+      --ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);
+      --anim-fast: 180ms;
+      --anim-mid: 260ms;
     }
 
     @keyframes dataStreamFlow {
@@ -121,6 +124,7 @@
       padding: 32px;
       position: relative;
       z-index: 1;
+      contain: layout paint;
     }
 
     .login-card h1 {
@@ -158,7 +162,7 @@
       font-size: 0.95rem;
       outline: none;
       backdrop-filter: blur(5px);
-      transition: all 0.3s ease;
+      transition: border-color var(--anim-mid) var(--ease-smooth), box-shadow var(--anim-mid) var(--ease-smooth), background-color var(--anim-mid) var(--ease-smooth);
     }
 
     .login-card input::placeholder {
@@ -181,8 +185,9 @@
       font-weight: 700;
       background: linear-gradient(135deg, #0088ff, #0055cc);
       cursor: pointer;
-      transition: all 0.3s ease;
+      transition: transform var(--anim-fast) var(--ease-smooth), box-shadow var(--anim-mid) var(--ease-smooth), opacity var(--anim-mid) var(--ease-smooth);
       box-shadow: 0 0 20px rgba(0, 136, 255, 0.3);
+      will-change: transform;
     }
 
     .btn-primary:hover {
@@ -224,6 +229,7 @@
       grid-template-columns: 260px 1fr;
       position: relative;
       background: var(--primary-dark);
+      isolation: isolate;
     }
 
     .dashboard::before {
@@ -253,6 +259,7 @@
       position: absolute;
       opacity: 0.4;
       filter: blur(1.5px);
+      will-change: transform, opacity;
     }
 
     .stream-cyan {
@@ -303,7 +310,7 @@
       font-weight: 600;
       cursor: pointer;
       font-size: 0.9rem;
-      transition: all 0.3s ease;
+      transition: background-color var(--anim-fast) var(--ease-smooth), color var(--anim-fast) var(--ease-smooth), transform var(--anim-fast) var(--ease-smooth);
     }
 
     .nav-item:hover {
@@ -336,7 +343,7 @@
       width: 100%;
       margin: 0;
       font-size: 0.9rem;
-      transition: all 0.3s ease;
+      transition: background-color var(--anim-fast) var(--ease-smooth), box-shadow var(--anim-mid) var(--ease-smooth), transform var(--anim-fast) var(--ease-smooth);
     }
 
     .btn-logout:hover {
@@ -361,6 +368,9 @@
       border-bottom: 1px solid rgba(0, 217, 255, 0.1);
       background: rgba(10, 14, 39, 0.4);
       backdrop-filter: blur(10px);
+      position: sticky;
+      top: 0;
+      z-index: 12;
     }
 
     .title-block h1 {
@@ -395,7 +405,7 @@
       outline: none;
       font-size: 0.9rem;
       backdrop-filter: blur(5px);
-      transition: all 0.3s ease;
+      transition: border-color var(--anim-mid) var(--ease-smooth), box-shadow var(--anim-mid) var(--ease-smooth), background-color var(--anim-mid) var(--ease-smooth);
     }
 
     .search::placeholder {
@@ -416,10 +426,11 @@
       color: var(--neon-cyan);
       background: rgba(0, 217, 255, 0.1);
       cursor: pointer;
-      transition: all 0.3s ease;
+      transition: background-color var(--anim-fast) var(--ease-smooth), box-shadow var(--anim-mid) var(--ease-smooth), transform var(--anim-fast) var(--ease-smooth);
       font-size: 0.9rem;
       text-transform: uppercase;
       letter-spacing: 0.5px;
+      will-change: transform;
     }
 
     .btn-csv:hover {
@@ -435,10 +446,11 @@
       color: #ffd0bf;
       background: rgba(255, 107, 53, 0.12);
       cursor: pointer;
-      transition: all 0.3s ease;
+      transition: background-color var(--anim-fast) var(--ease-smooth), box-shadow var(--anim-mid) var(--ease-smooth), transform var(--anim-fast) var(--ease-smooth);
       font-size: 0.9rem;
       text-transform: uppercase;
       letter-spacing: 0.5px;
+      will-change: transform;
     }
 
     .btn-refresh:hover {
@@ -488,7 +500,9 @@
       min-width: 0;
       display: flex;
       flex-direction: column;
-      transition: all 0.3s ease;
+      transition: border-color var(--anim-mid) var(--ease-smooth), transform var(--anim-fast) var(--ease-smooth);
+      content-visibility: auto;
+      contain-intrinsic-size: 420px;
     }
 
     .table-card:hover {
@@ -535,7 +549,7 @@
       color: #ffd0bf;
       background: rgba(255, 107, 53, 0.12);
       cursor: pointer;
-      transition: all 0.3s ease;
+      transition: background-color var(--anim-fast) var(--ease-smooth), box-shadow var(--anim-mid) var(--ease-smooth), transform var(--anim-fast) var(--ease-smooth);
       font-size: 0.75rem;
       text-transform: uppercase;
       letter-spacing: 0.4px;
@@ -591,7 +605,7 @@
       color: #ffd9e2;
       background: rgba(255, 23, 68, 0.13);
       cursor: pointer;
-      transition: all 0.3s ease;
+      transition: background-color var(--anim-fast) var(--ease-smooth), box-shadow var(--anim-mid) var(--ease-smooth), transform var(--anim-fast) var(--ease-smooth);
       font-size: 0.78rem;
       text-transform: uppercase;
       letter-spacing: 0.4px;
@@ -625,6 +639,8 @@
       overflow: auto;
       max-height: calc(100vh - 300px);
       flex: 1;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
     }
 
     table {
@@ -718,17 +734,40 @@
       }
 
       .sidebar {
-        padding: 16px 14px;
+        padding: 12px;
+        border-right: none;
+        border-bottom: 1px solid rgba(0, 217, 255, 0.12);
+        position: sticky;
+        top: 0;
+        z-index: 14;
+        backdrop-filter: blur(8px);
+      }
+
+      .brand {
+        margin-bottom: 12px;
+      }
+
+      .nav {
+        display: flex;
+        gap: 8px;
+        overflow-x: auto;
+        padding-bottom: 2px;
+      }
+
+      .nav-item {
+        flex: 0 0 auto;
       }
 
       .sidebar-bottom {
-        margin-top: 12px;
+        margin-top: 10px;
+        grid-template-columns: 1fr 1fr;
       }
 
       .topbar {
         flex-direction: column;
         align-items: flex-start;
         padding: 16px;
+        backdrop-filter: none;
       }
 
       .toolbar {
@@ -745,8 +784,35 @@
         gap: 16px;
       }
 
+      .table-card {
+        backdrop-filter: none;
+      }
+
+      .table-wrap {
+        max-height: 360px;
+      }
+
       .title-block h1 {
         font-size: 1.3rem;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce), (max-width: 820px) {
+      .stream,
+      .table-card.success,
+      .table-card.failed {
+        animation: none !important;
+      }
+
+      .btn-primary,
+      .btn-csv,
+      .btn-refresh,
+      .btn-refresh-mini,
+      .btn-danger,
+      .btn-logout,
+      .nav-item,
+      .table-card {
+        transition-duration: 0ms !important;
       }
     }
   </style>
@@ -777,7 +843,7 @@
         <button id="navUserManagementBtn" class="nav-item" type="button">User Management</button>
         <button id="navSecurityLogsBtn" class="nav-item active" type="button">Security Logs</button>
         <button class="nav-item" type="button">Analytics</button>
-        <button class="nav-item" type="button">Settings</button>
+        <button id="navSettingsBtn" class="nav-item" type="button">Settings</button>
       </nav>
 
       <div class="sidebar-bottom">
@@ -821,13 +887,15 @@
                   <th>City</th>
                   <th>ISP</th>
                   <th>Device</th>
+                  <th>Brand</th>
+                  <th>Model</th>
                   <th>Browser</th>
                   <th>Latitude</th>
                   <th>Longitude</th>
                 </tr>
               </thead>
               <tbody id="loginHistoryList">
-                <tr class="empty-row"><td colspan="9">Loading login history...</td></tr>
+                <tr class="empty-row"><td colspan="11">Loading login history...</td></tr>
               </tbody>
             </table>
           </div>
@@ -845,6 +913,8 @@
                   <th>City</th>
                   <th>ISP</th>
                   <th>Device</th>
+                  <th>Brand</th>
+                  <th>Model</th>
                   <th>Browser</th>
                   <th>Latitude</th>
                   <th>Longitude</th>
@@ -852,7 +922,7 @@
                 </tr>
               </thead>
               <tbody id="failedHistoryList">
-                <tr class="empty-row"><td colspan="10">Loading failed attempts...</td></tr>
+                <tr class="empty-row"><td colspan="12">Loading failed attempts...</td></tr>
               </tbody>
             </table>
           </div>
@@ -883,6 +953,31 @@
             </table>
           </div>
         </article>
+
+        <article id="settingsCard" class="table-card management hidden">
+          <div class="card-head">
+            <span class="card-head-title">Security Settings - Device Safety</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>User</th>
+                  <th>Device Type</th>
+                  <th>Brand</th>
+                  <th>Model</th>
+                  <th>Browser</th>
+                  <th>Location</th>
+                  <th>Status</th>
+                  <th>Safety Action</th>
+                </tr>
+              </thead>
+              <tbody id="settingsDeviceList">
+                <tr class="empty-row"><td colspan="8">No active devices found.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
       </section>
 
       <footer class="footer">Showing latest 50 records</footer>
@@ -895,7 +990,13 @@
       const container = document.getElementById('neonStreamsContainer');
       if (!container) return;
 
-      const streamCount = 15;
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || window.innerWidth < 820) {
+        container.innerHTML = '';
+        return;
+      }
+
+      const cpuHint = navigator.hardwareConcurrency || 4;
+      const streamCount = Math.max(6, Math.min(12, Math.floor(cpuHint * 1.5)));
       const colors = ['stream-cyan', 'stream-orange'];
       
       for (let i = 0; i < streamCount; i++) {

@@ -66,11 +66,9 @@
       align-items: flex-start;
     }
 
-    .change-song-btn {
+    .floating-control-btn {
       position: fixed;
-      left: 50%;
       bottom: calc(68px + env(safe-area-inset-bottom));
-      transform: translateX(-50%);
       z-index: 7;
       border: 1px solid rgba(121, 215, 255, 0.58);
       background: rgba(16, 20, 34, 0.56);
@@ -82,18 +80,33 @@
       width: 42px;
       height: 42px;
       padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+      text-align: center;
       cursor: pointer;
       box-shadow: 0 8px 20px rgba(0, 0, 0, 0.34);
       backdrop-filter: blur(8px);
       transition: transform 180ms ease, background 180ms ease, border-color 180ms ease;
     }
 
-    .change-song-btn:hover,
-    .change-song-btn:focus-visible {
-      transform: translateX(-50%) translateY(-1px);
+    .change-song-btn {
+      left: 50%;
+      transform: translateX(-50%);
+    }
+
+    .floating-control-btn:hover,
+    .floating-control-btn:focus-visible {
+      transform: translateY(-1px);
       background: rgba(22, 30, 52, 0.7);
       border-color: rgba(121, 215, 255, 0.82);
       outline: none;
+    }
+
+    .change-song-btn:hover,
+    .change-song-btn:focus-visible {
+      transform: translateX(-50%) translateY(-1px);
     }
 
     #soundRain {
@@ -150,6 +163,11 @@
 
     .love-chip.anim-pop {
       animation-name: lovePopFall;
+    }
+
+    body.song-paused .love-chip,
+    body.song-paused .line.just-activated {
+      animation-play-state: paused !important;
     }
 
     .tap-hint {
@@ -361,7 +379,7 @@
   <canvas id="soundRain" aria-hidden="true"></canvas>
   <div id="loveShower" class="love-shower" aria-hidden="true"></div>
   <audio id="song" autoplay loop preload="auto"></audio>
-  <button id="changeSongBtn" class="change-song-btn" type="button" aria-label="Change Song" title="Change Song">&#9835;</button>
+  <button id="changeSongBtn" class="floating-control-btn change-song-btn" type="button" aria-label="Change Song" title="Change Song">&#9835;</button>
   <div id="tapHint" class="tap-hint" aria-live="polite">Tap anywhere to play music</div>
 
   <main class="shell">
@@ -662,6 +680,16 @@
       }, LOW_END_PROFILE ? 1400 : 1200);
     }
 
+    function stopLoveShower() {
+      if (!loveTimer) return;
+      clearInterval(loveTimer);
+      loveTimer = 0;
+    }
+
+    function setPausedVisualState(paused) {
+      document.body.classList.toggle("song-paused", Boolean(paused));
+    }
+
     function setTapHintVisible(show) {
       if (!tapHintEl) return;
       tapHintEl.classList.toggle("show", Boolean(show));
@@ -956,16 +984,24 @@
       }
     });
     songEl.addEventListener("play", () => {
+      setPausedVisualState(false);
+      startLoveShower();
       setTapHintVisible(false);
       startRealtimeLoop();
     });
     songEl.addEventListener("pause", () => {
+      setPausedVisualState(true);
+      stopLoveShower();
+      stopRealtimeLoop();
       setTapHintVisible(true);
       updateLyrics();
       paintSoundRain();
     });
 
     songEl.addEventListener("ended", () => {
+      setPausedVisualState(true);
+      stopLoveShower();
+      stopRealtimeLoop();
       setTapHintVisible(true);
       updateLyrics();
       paintSoundRain();
@@ -991,16 +1027,25 @@
       });
     }
 
-    function tryUnlockAutoplay() {
-      if (!songEl.paused) return;
-      setTapHintVisible(false);
-      resumeSoundRain();
-      attemptAutoplay();
+    function togglePlaybackFromTap(event) {
+      const target = event && event.target;
+      if (target && typeof target.closest === "function" && target.closest("#changeSongBtn")) {
+        return;
+      }
+
+      if (songEl.paused || songEl.ended) {
+        setTapHintVisible(false);
+        resumeSoundRain();
+        attemptAutoplay();
+      } else {
+        songEl.pause();
+        if (tapHintEl) {
+          tapHintEl.textContent = "Song paused. Tap anywhere to play music";
+        }
+      }
     }
 
-    document.addEventListener("pointerdown", tryUnlockAutoplay, { passive: true });
-    document.addEventListener("click", tryUnlockAutoplay, { passive: true });
-    document.addEventListener("keydown", tryUnlockAutoplay);
+    document.addEventListener("pointerdown", togglePlaybackFromTap, { passive: true });
 
     window.addEventListener("resize", () => {
       loveLaneOrder = [];
@@ -1025,7 +1070,10 @@
     seedRainDrops();
     updateLyrics();
     paintSoundRain();
-    startLoveShower();
+    setPausedVisualState(songEl.paused);
+    if (!songEl.paused) {
+      startLoveShower();
+    }
     startRealtimeLoop();
     setTapHintVisible(songEl.paused);
     attemptAutoplay();

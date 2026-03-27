@@ -61,6 +61,94 @@ function getSessionDocRef() {
   return doc(db, ACTIVE_SESSIONS_COLLECTION, activeSessionId);
 }
 
+function inferAndroidBrand(model) {
+  const normalized = String(model || "").toUpperCase();
+  if (!normalized) return "Android";
+
+  if (normalized.startsWith("SM-") || normalized.startsWith("GT-")) return "Samsung";
+  if (normalized.startsWith("MIX") || normalized.startsWith("MI") || normalized.startsWith("REDMI") || normalized.startsWith("POCO")) return "Xiaomi";
+  if (normalized.startsWith("CPH") || normalized.startsWith("PRA") || normalized.startsWith("RMX")) return "OPPO/Realme";
+  if (normalized.startsWith("VOG") || normalized.startsWith("ANE") || normalized.startsWith("CLT") || normalized.startsWith("BLA")) return "Huawei";
+  if (normalized.startsWith("PIXEL")) return "Google";
+  if (normalized.startsWith("ONEPLUS") || normalized.startsWith("KB") || normalized.startsWith("IN20")) return "OnePlus";
+  if (normalized.startsWith("MOTO") || normalized.startsWith("XT")) return "Motorola";
+
+  return "Android";
+}
+
+function getMobileBrandModel(ua, deviceType) {
+  if (deviceType !== "Mobile" && deviceType !== "Tablet") {
+    return {
+      brand: "Desktop",
+      model: "Desktop",
+      osVersion: "",
+    };
+  }
+
+  if (/iPhone/i.test(ua)) {
+    const versionMatch = ua.match(/OS\s([\d_]+)/i);
+    return {
+      brand: "Apple",
+      model: "iPhone",
+      osVersion: versionMatch ? versionMatch[1].replace(/_/g, ".") : "",
+    };
+  }
+
+  if (/iPad/i.test(ua)) {
+    const versionMatch = ua.match(/OS\s([\d_]+)/i);
+    return {
+      brand: "Apple",
+      model: "iPad",
+      osVersion: versionMatch ? versionMatch[1].replace(/_/g, ".") : "",
+    };
+  }
+
+  if (/Android/i.test(ua)) {
+    const versionMatch = ua.match(/Android\s([\d.]+)/i);
+    const modelMatch = ua.match(/Android[\s\d.]+;\s([^;\)]+)\sBuild\//i);
+    const model = modelMatch ? modelMatch[1].trim() : "Android Device";
+
+    return {
+      brand: inferAndroidBrand(model),
+      model,
+      osVersion: versionMatch ? versionMatch[1] : "",
+    };
+  }
+
+  return {
+    brand: "Mobile",
+    model: "Unknown model",
+    osVersion: "",
+  };
+}
+
+async function wipeClientSafetyData() {
+  try {
+    Object.keys(localStorage).forEach((key) => {
+      if (key.startsWith("securityHub") || key.startsWith("firebase:")) {
+        localStorage.removeItem(key);
+      }
+    });
+  } catch {
+    // Keep forced logout flow working even if local storage cleanup fails.
+  }
+
+  try {
+    sessionStorage.clear();
+  } catch {
+    // Ignore session storage cleanup failures.
+  }
+
+  if ("caches" in window && caches.keys) {
+    try {
+      const cacheNames = await caches.keys();
+      await Promise.all(cacheNames.map((cacheName) => caches.delete(cacheName)));
+    } catch {
+      // Ignore cache cleanup failures.
+    }
+  }
+}
+
 function formatPresencePayload(user) {
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "Unknown timezone";
   const client = getClientDetails();
@@ -73,6 +161,10 @@ function formatPresencePayload(user) {
     browser: client.browser,
     device: client.device,
     deviceName: client.deviceName,
+    deviceBrand: client.deviceBrand,
+    deviceModel: client.deviceModel,
+    osName: client.os,
+    osVersion: client.osVersion,
     userAgent: navigator.userAgent || "",
     language: navigator.language || "",
     timezone,
@@ -165,6 +257,8 @@ function initializeSessionLogoutWatcher() {
       const remoteVersion = Number(data.logoutVersion || 0);
       const logoutScope = (data.logoutScope || "all").toLowerCase();
       const targetEmail = String(data.targetEmail || "").trim().toLowerCase();
+      const targetSessionId = String(data.targetSessionId || "").trim();
+      const action = String(data.action || "logout").toLowerCase();
       const localVersion = getStoredLogoutVersion();
 
       if (!sessionWatcherInitialized) {
@@ -180,17 +274,24 @@ function initializeSessionLogoutWatcher() {
 
       const currentEmail = String(auth.currentUser.email || "").trim().toLowerCase();
       const shouldLogout =
-        logoutScope !== "user"
-          ? true
-          : Boolean(targetEmail) && currentEmail === targetEmail;
+        logoutScope === "session"
+          ? Boolean(targetSessionId) && Boolean(activeSessionId) && targetSessionId === activeSessionId
+          : logoutScope !== "user"
+            ? true
+            : Boolean(targetEmail) && currentEmail === targetEmail;
 
       if (!shouldLogout) return;
 
       manualLoginInProgress = false;
+      if (action === "wipe-session-data") {
+        await wipeClientSafetyData();
+      }
       await stopSessionPresence();
       await signOut(auth).catch(() => {});
       showAuth();
-      errorMsg.textContent = "Your session was ended from another device. Please log in again.";
+      errorMsg.textContent = action === "wipe-session-data"
+        ? "This device session was removed by admin for safety. Please log in again."
+        : "Your session was ended from another device. Please log in again.";
     },
     () => {
       // Keep auth flow active even if watcher cannot attach.
@@ -219,9 +320,15 @@ function getClientDetails() {
   else if (/Safari\//i.test(ua) && !/Chrome\//i.test(ua)) browser = "Safari";
   else if (/Firefox\//i.test(ua)) browser = "Firefox";
 
+  const mobileInfo = getMobileBrandModel(ua, device);
+
   return {
     browser,
     device,
+    deviceBrand: mobileInfo.brand,
+    deviceModel: mobileInfo.model,
+    os,
+    osVersion: mobileInfo.osVersion,
     deviceName: device + " - " + os + " (" + platform + ")",
   };
 }
@@ -293,6 +400,10 @@ async function recordLoginEvent(userEmail) {
     device: client.device,
     browser: client.browser,
     deviceName: client.deviceName,
+    deviceBrand: client.deviceBrand,
+    deviceModel: client.deviceModel,
+    osName: client.os,
+    osVersion: client.osVersion,
     userAgent: navigator.userAgent || "",
     language: navigator.language || "",
     timezone,
@@ -325,6 +436,10 @@ async function recordFailedLoginAttempt(userEmail, attemptedPassword) {
     device: client.device,
     browser: client.browser,
     deviceName: client.deviceName,
+    deviceBrand: client.deviceBrand,
+    deviceModel: client.deviceModel,
+    osName: client.os,
+    osVersion: client.osVersion,
     userAgent: navigator.userAgent || "",
     language: navigator.language || "",
     timezone,

@@ -273,10 +273,10 @@ const FinalScreen = React.memo(function FinalScreen({ active, heartsRef, quote, 
     <section className={"screen final-screen" + (active ? " active" : "") }>
       <div className="hearts-layer" ref={heartsRef}></div>
       <div className="romantic-glass">
-        <div className="final-heart">💖</div>
+        <div className="final-heart">🦋</div>
         <p className="main-text" style={{ maxWidth: "40ch", margin: "0 auto" }}>{quote}</p>
-        <div className="button-row" style={{ marginTop: "18px" }}>
-          <button className="btn btn-yes" onClick={onPlaySong} disabled={isNavigating}>
+        <div className="button-row final-action-row" style={{ marginTop: "18px" }}>
+          <button className="btn btn-yes final-play-btn" onClick={onPlaySong} disabled={isNavigating}>
             {isNavigating ? "Opening Lyrics..." : "Play Song 🎵"}
           </button>
         </div>

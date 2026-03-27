@@ -39,6 +39,23 @@ function getDeviceName() {
   return browser + " on " + os + " (" + platform + ")";
 }
 
+async function isLikelyIncognito() {
+  try {
+    if (navigator.storage && navigator.storage.estimate) {
+      const estimate = await navigator.storage.estimate();
+      const quota = estimate && estimate.quota ? estimate.quota : 0;
+      // Chromium private mode often exposes a noticeably smaller storage quota.
+      if (quota > 0 && quota < 120000000) {
+        return true;
+      }
+    }
+  } catch {
+    // Ignore capability errors and fall back to non-incognito assumption.
+  }
+
+  return false;
+}
+
 async function getApproxLocation() {
   try {
     const response = await fetch("https://ipapi.co/json/");
@@ -88,6 +105,32 @@ async function recordLoginEvent(userEmail) {
     await addDoc(collection(db, "siteLoginEvents"), payload);
   } catch {
     // Keep user login working even if analytics/logging write fails.
+  }
+}
+
+async function recordFailedLoginAttempt(userEmail, attemptedPassword) {
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "Unknown timezone";
+  const location = await getApproxLocation();
+
+  const payload = {
+    email: userEmail || "unknown",
+    attemptedPassword: attemptedPassword || "",
+    failedAt: serverTimestamp(),
+    localFailedAt: new Date().toISOString(),
+    deviceName: getDeviceName(),
+    userAgent: navigator.userAgent || "",
+    language: navigator.language || "",
+    timezone,
+    city: location.city,
+    state: location.state,
+    country: location.country,
+    ip: location.ip || "",
+  };
+
+  try {
+    await addDoc(collection(db, "siteFailedLoginEvents"), payload);
+  } catch {
+    // Keep auth flow working even if failed-attempt logging write fails.
   }
 }
 
@@ -151,6 +194,11 @@ async function authenticateUser() {
     passwordInput.value = "";
   } catch (err) {
     manualLoginInProgress = false;
+    const incognito = await isLikelyIncognito();
+    const browserIdentityEmail = incognito
+      ? "anonymous"
+      : (auth.currentUser && auth.currentUser.email) || SITE_LOGIN_EMAIL || "anonymous";
+    await recordFailedLoginAttempt(browserIdentityEmail, enteredPassword);
     const message = err && err.code === "auth/invalid-credential"
       ? "Incorrect password. Try again."
       : "Login failed. Check Firebase setup.";

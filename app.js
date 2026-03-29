@@ -1,12 +1,17 @@
 const { useEffect, useRef, useState, useMemo, useCallback } = React;
 
 const CONFIG = {
-  HER_NAME: "Bhanu",
-  INTRO_TEXT: "This is for you Bhanu 💖",
- ROMANTIC_MESSAGE: `Some feelings are hard to explain
-but I feel them every time I think of you.
-My heart feels calm when you are near,
-because it knows you are special to me.`,
+  HER_NAME: "Baby",
+  INTRO_TEXT: "Miss you Baby 💖",
+  // HER_NAME: "Bhanu",
+  // INTRO_TEXT: "This is for you Bhanu 💖",
+ ROMANTIC_MESSAGE: `Kya kr rhi h Idhar
+ Kuch kaam nhi h kya ja ke so besharm
+ jb dekho tb mobile mobile jake khana bnao....`,
+//  ROMANTIC_MESSAGE: `Some feelings are hard to explain
+// but I feel them every time I think of you.
+// My heart feels calm when you are near,
+// because it knows you are special to me.`,
 
   LOVE_PAGE_TITLE: "I love you ❤️",
  LOVE_PAGE_SUBTITLE: `You are the peace I never knew I needed,

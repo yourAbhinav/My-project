@@ -15,6 +15,18 @@ const firebaseConfig = {
 
 export const SITE_LOGIN_EMAIL = "testnow683@gmail.com";
 export const ADMIN_EMAIL = "abhinavkumar09870@gmail.com";
+export const API_BASE = "https://my-project-641o.onrender.com";
+
+const runtimeMonitorBase =
+  typeof window !== "undefined" && typeof window.__SECURITY_MONITOR_API_BASE === "string"
+    ? window.__SECURITY_MONITOR_API_BASE.trim()
+    : "";
+
+const isLocalHost =
+  typeof window !== "undefined" &&
+  (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+
+export const SECURITY_MONITOR_API_BASE = runtimeMonitorBase || API_BASE || (isLocalHost ? "http://localhost:8080" : "");
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);

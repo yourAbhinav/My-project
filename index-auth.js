@@ -12,7 +12,7 @@ import {
   setDoc,
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
-import { auth, authReady, db, SITE_LOGIN_EMAIL, ADMIN_EMAIL } from "./firebase-config.js";
+import { auth, authReady, db, SITE_LOGIN_EMAIL, ADMIN_EMAIL, SECURITY_MONITOR_API_BASE } from "./firebase-config.js";
 
 const authScreen = document.getElementById("authScreen");
 const welcomeScreen = document.getElementById("welcomeScreen");
@@ -21,6 +21,8 @@ const passwordInput = document.getElementById("passwordInput");
 const submitBtn = document.getElementById("submitBtn");
 const errorMsg = document.getElementById("errorMsg");
 const continueBtn = document.getElementById("continueBtn");
+const trustDeviceBtn = document.getElementById("trustDeviceBtn");
+const securityMonitorMsg = document.getElementById("securityMonitorMsg");
 let manualLoginInProgress = false;
 const SESSION_CONTROL_COLLECTION = "sessionControl";
 const SESSION_CONTROL_DOC = "global";
@@ -32,6 +34,10 @@ let sessionWatcherInitialized = false;
 let activeSessionId = "";
 let sessionHeartbeatTimer = null;
 let sessionPresenceLocation = null;
+let cachedAdvancedMonitorData = null;
+let cachedUniqueDeviceHash = "";
+const FINGERPRINTJS_ESM_URL = "https://cdn.jsdelivr.net/npm/@fingerprintjs/fingerprintjs@4/+esm";
+const UA_PARSER_ESM_URL = "https://cdn.jsdelivr.net/npm/ua-parser-js@1.0.39/+esm";
 
 function getStoredLogoutVersion() {
   const raw = localStorage.getItem(SESSION_LOGOUT_VERSION_KEY);
@@ -299,6 +305,236 @@ function initializeSessionLogoutWatcher() {
   );
 }
 
+function setSecurityMonitorMessage(message, type) {
+  if (!securityMonitorMsg) return;
+
+  securityMonitorMsg.textContent = message || "";
+  securityMonitorMsg.style.color = type === "error" ? "#ffd4dd" : "#cbe6ff";
+}
+
+async function getFingerprintVisitorData() {
+  try {
+    const module = await import(FINGERPRINTJS_ESM_URL);
+    const fpAgent = await module.load();
+    const result = await fpAgent.get();
+    const components = result.components || {};
+
+    return {
+      visitorId: result.visitorId || "",
+      fingerprint: {
+        canvasFingerprint: components.canvas?.value?.geometry || components.canvas?.value?.text || "",
+        hardwareConcurrency: navigator.hardwareConcurrency || null,
+        screenResolution: `${window.screen?.width || 0}x${window.screen?.height || 0}`,
+        platform: navigator.platform || "",
+        deviceType: /Mobi|Android|iPhone|iPad|Tablet/i.test(navigator.userAgent || "") ? "Mobile" : "Desktop",
+      },
+    };
+  } catch {
+    return {
+      visitorId: "",
+      fingerprint: {
+        canvasFingerprint: "",
+        hardwareConcurrency: navigator.hardwareConcurrency || null,
+        screenResolution: `${window.screen?.width || 0}x${window.screen?.height || 0}`,
+        platform: navigator.platform || "",
+        deviceType: /Mobi|Android|iPhone|iPad|Tablet/i.test(navigator.userAgent || "") ? "Mobile" : "Desktop",
+      },
+    };
+  }
+}
+
+async function getUaDetails() {
+  try {
+    const module = await import(UA_PARSER_ESM_URL);
+    const parser = new module.UAParser(navigator.userAgent || "");
+    const result = parser.getResult();
+    const vendor = result.device?.vendor || "Unknown vendor";
+    const model = result.device?.model || (result.device?.type ? `${result.device.type} device` : "Unknown model");
+    const osName = result.os?.name || "Unknown OS";
+    const osVersion = result.os?.version || "";
+
+    return {
+      vendor,
+      model,
+      osName,
+      osVersion,
+      browserName: result.browser?.name || "Unknown browser",
+      exactModel: `${vendor} ${model}`.trim(),
+    };
+  } catch {
+    const client = getClientDetails();
+    return {
+      vendor: client.deviceBrand || "Unknown vendor",
+      model: client.deviceModel || "Unknown model",
+      osName: client.os || "Unknown OS",
+      osVersion: client.osVersion || "",
+      browserName: client.browser || "Unknown browser",
+      exactModel: `${client.deviceBrand || "Unknown vendor"} ${client.deviceModel || "Unknown model"}`.trim(),
+    };
+  }
+}
+
+async function getGeoLocationWithPermission() {
+  if (!navigator.geolocation) {
+    return { source: "none", latitude: null, longitude: null };
+  }
+
+  try {
+    const position = await new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: true,
+        timeout: 12000,
+        maximumAge: 0,
+      });
+    });
+
+    return {
+      source: "gps",
+      latitude: Number(position.coords.latitude),
+      longitude: Number(position.coords.longitude),
+      accuracy: Number(position.coords.accuracy) || null,
+    };
+  } catch {
+    return { source: "none", latitude: null, longitude: null };
+  }
+}
+
+async function getNetworkFallback() {
+  try {
+    const response = await fetch("https://ipapi.co/json/");
+    if (response.ok) {
+      const data = await response.json();
+      return {
+        source: "ip",
+        ip: data.ip || "",
+        asn: data.asn || "",
+        asnOrg: data.org || data.asn_org || "Unknown ISP",
+        city: data.city || "Unknown city",
+        country: data.country_name || "Unknown country",
+        ispProvider: data.org || data.asn_org || "Unknown ISP",
+      };
+    }
+  } catch {
+    // Try secondary provider.
+  }
+
+  try {
+    const response = await fetch("https://ipinfo.io/json");
+    if (response.ok) {
+      const data = await response.json();
+      return {
+        source: "ip",
+        ip: data.ip || "",
+        asn: data.org || "",
+        asnOrg: data.org || "Unknown ISP",
+        city: data.city || "Unknown city",
+        country: data.country || "Unknown country",
+        ispProvider: data.org || "Unknown ISP",
+      };
+    }
+  } catch {
+    // Use unknown values if all providers fail.
+  }
+
+  return {
+    source: "ip",
+    ip: "",
+    asn: "",
+    asnOrg: "Unknown ISP",
+    city: "Unknown city",
+    country: "Unknown country",
+    ispProvider: "Unknown ISP",
+  };
+}
+
+async function collectAdvancedMonitorData() {
+  const [fingerprintData, uaData, gpsData] = await Promise.all([
+    getFingerprintVisitorData(),
+    getUaDetails(),
+    getGeoLocationWithPermission(),
+  ]);
+  const networkData = await getNetworkFallback();
+
+  return {
+    visitorId: fingerprintData.visitorId,
+    fingerprint: fingerprintData.fingerprint,
+    ua: uaData,
+    geo: gpsData,
+    network: networkData,
+  };
+}
+
+async function syncAdvancedLoginMonitor(user, advancedData) {
+  if (!SECURITY_MONITOR_API_BASE) {
+    return { ok: false, reason: "monitor api base not configured" };
+  }
+
+  const idToken = await user.getIdToken();
+  const response = await fetch(`${SECURITY_MONITOR_API_BASE}/api/security/session/start`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${idToken}`,
+    },
+    credentials: "include",
+    body: JSON.stringify(advancedData),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Monitor API failed (${response.status})`);
+  }
+
+  return response.json();
+}
+
+async function trustCurrentDevice() {
+  if (!auth.currentUser) {
+    setSecurityMonitorMessage("Sign in first before trusting this device.", "error");
+    return;
+  }
+
+  if (!SECURITY_MONITOR_API_BASE) {
+    setSecurityMonitorMessage("Monitor API is not configured yet.", "error");
+    return;
+  }
+
+  if (!cachedAdvancedMonitorData && !cachedUniqueDeviceHash) {
+    setSecurityMonitorMessage("No device fingerprint captured yet. Login once first.", "error");
+    return;
+  }
+
+  if (trustDeviceBtn) trustDeviceBtn.disabled = true;
+  setSecurityMonitorMessage("Trusting this hardware fingerprint...", "ok");
+
+  try {
+    const idToken = await auth.currentUser.getIdToken();
+    const response = await fetch(`${SECURITY_MONITOR_API_BASE}/api/security/device/trust`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${idToken}`,
+      },
+      credentials: "include",
+      body: JSON.stringify({
+        uniqueDeviceHash: cachedUniqueDeviceHash,
+        visitorId: cachedAdvancedMonitorData ? cachedAdvancedMonitorData.visitorId : "",
+        fingerprint: cachedAdvancedMonitorData ? cachedAdvancedMonitorData.fingerprint : {},
+        note: "Trusted from site UI action",
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Trust request failed (${response.status})`);
+    }
+
+    setSecurityMonitorMessage("Device trusted. Future alerts will be calmer for this fingerprint.", "ok");
+  } catch {
+    setSecurityMonitorMessage("Could not trust this device right now. Check backend status.", "error");
+  } finally {
+    if (trustDeviceBtn) trustDeviceBtn.disabled = false;
+  }
+}
+
 function getClientDetails() {
   const ua = navigator.userAgent || "";
   const platform = navigator.platform || "Unknown platform";
@@ -388,10 +624,17 @@ async function getApproxLocation() {
   }
 }
 
-async function recordLoginEvent(userEmail) {
+async function recordLoginEvent(userEmail, advancedData = null, monitorResult = null) {
+  if (monitorResult && monitorResult.ok) {
+    // The backend already writes the canonical enriched login event.
+    return;
+  }
+
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "Unknown timezone";
   const location = await getApproxLocation();
   const client = getClientDetails();
+  const uaData = advancedData && advancedData.ua ? advancedData.ua : {};
+  const networkData = advancedData && advancedData.network ? advancedData.network : {};
 
   const payload = {
     email: userEmail || "unknown",
@@ -414,6 +657,12 @@ async function recordLoginEvent(userEmail) {
     isp: location.isp || "Unknown ISP",
     latitude: location.latitude,
     longitude: location.longitude,
+    exact_model: uaData.exactModel || `${client.deviceBrand || "Unknown brand"} ${client.deviceModel || "Unknown model"}`.trim(),
+    unique_device_hash: (monitorResult && monitorResult.uniqueDeviceHash) || "",
+    real_ip: (monitorResult && monitorResult.realIp) || networkData.ip || location.ip || "",
+    isp_provider: (monitorResult && monitorResult.ispProvider) || networkData.ispProvider || location.isp || "Unknown ISP",
+    is_vpn_detected: Boolean(monitorResult && monitorResult.isVpnDetected),
+    security_anomaly: Boolean(monitorResult && monitorResult.securityAnomaly),
   };
 
   try {
@@ -463,6 +712,9 @@ function showAuth() {
   authScreen.style.display = "flex";
   welcomeScreen.style.display = "none";
   mainContent.style.display = "none";
+  cachedAdvancedMonitorData = null;
+  cachedUniqueDeviceHash = "";
+  setSecurityMonitorMessage("", "ok");
 }
 
 function showWelcome() {
@@ -515,7 +767,27 @@ async function authenticateUser() {
   try {
     await authReady;
     const credential = await signInWithEmailAndPassword(auth, SITE_LOGIN_EMAIL, enteredPassword);
-    await recordLoginEvent(credential.user && credential.user.email);
+    let advancedData = null;
+    let monitorResult = null;
+
+    setSecurityMonitorMessage("Running advanced 3-layer security verification...", "ok");
+
+    try {
+      advancedData = await collectAdvancedMonitorData();
+      cachedAdvancedMonitorData = advancedData;
+      monitorResult = await syncAdvancedLoginMonitor(credential.user, advancedData);
+      cachedUniqueDeviceHash = (monitorResult && monitorResult.uniqueDeviceHash) || "";
+
+      if (monitorResult && monitorResult.securityAnomaly) {
+        setSecurityMonitorMessage("Security anomaly flagged: new IP for this fingerprint. Alert sent.", "error");
+      } else {
+        setSecurityMonitorMessage("Security monitor verified device fingerprint and network.", "ok");
+      }
+    } catch {
+      setSecurityMonitorMessage("Advanced monitor API unavailable. Local logging is still active.", "error");
+    }
+
+    await recordLoginEvent(credential.user && credential.user.email, advancedData, monitorResult);
     await startSessionPresence(credential.user);
     showWelcome();
     passwordInput.value = "";
@@ -575,6 +847,10 @@ continueBtn.addEventListener("click", () => {
   welcomeScreen.style.display = "none";
   mainContent.style.display = "block";
 });
+
+if (trustDeviceBtn) {
+  trustDeviceBtn.addEventListener("click", trustCurrentDevice);
+}
 
 submitBtn.addEventListener("click", authenticateUser);
 passwordInput.addEventListener("keypress", (e) => {

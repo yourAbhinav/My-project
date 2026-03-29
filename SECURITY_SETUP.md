@@ -7,7 +7,7 @@ When password logic is in frontend JavaScript, anyone can inspect it in browser 
 - Authentication uses Firebase Email/Password.
 - Main page login uses `SITE_LOGIN_EMAIL` + entered password.
 - Admin panel is restricted to `ADMIN_EMAIL` account.
-- Works on static hosting like GitHub Pages (no always-on server required).
+- Advanced Login Monitor uses a Node backend for secure HttpOnly cookie, VPN/ASN checks, and anomaly alerts.
 
 ## Different password for login and admin
 Firebase stores one password per email account. To use different passwords:
@@ -24,3 +24,4 @@ Follow [FIREBASE_GITHUB_SETUP.md](FIREBASE_GITHUB_SETUP.md).
 ## Important
 - Firebase config values in frontend are normal and expected.
 - Security comes from Firebase Auth backend validation.
+- For full advanced monitoring online, deploy both frontend and `security-monitor-server` over HTTPS.

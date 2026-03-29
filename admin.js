@@ -213,6 +213,32 @@ function getModelLabel(item) {
   return item.deviceModel || "Unknown model";
 }
 
+function getIpLabel(item) {
+  return item.real_ip || item.ip || "N/A";
+}
+
+function getIspLabel(item) {
+  return item.isp_provider || item.isp || "Unknown ISP";
+}
+
+function getUniqueDeviceHash(item) {
+  return item.unique_device_hash || "N/A";
+}
+
+function getBooleanLikeValue(rawValue) {
+  if (typeof rawValue === "boolean") return rawValue;
+  const normalized = String(rawValue || "").trim().toLowerCase();
+  return normalized === "true" || normalized === "1" || normalized === "yes";
+}
+
+function getVpnStatusLabel(item) {
+  return getBooleanLikeValue(item.is_vpn_detected) ? "Yes" : "No";
+}
+
+function getAnomalyStatusLabel(item) {
+  return getBooleanLikeValue(item.security_anomaly) ? "Anomaly" : "Normal";
+}
+
 function formatCoordinate(value) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return "Unknown";
@@ -234,11 +260,15 @@ function getSearchText(item, timeValue) {
     city,
     state,
     country,
-    item.isp,
+    getIspLabel(item),
     item.latitude,
     item.longitude,
     item.timezone,
-    item.ip,
+    getIpLabel(item),
+    getUniqueDeviceHash(item),
+    getVpnStatusLabel(item),
+    getAnomalyStatusLabel(item),
+    item.exact_model,
     item.attemptedPassword,
   ].join(" ").toLowerCase();
 }
@@ -259,7 +289,7 @@ function renderLoginHistory(entries) {
   const filteredEntries = applySearch(entries, formatLoginTime);
 
   if (!filteredEntries.length) {
-    loginHistoryList.innerHTML = "<tr class=\"empty-row\"><td colspan=\"11\">No login history yet.</td></tr>";
+    loginHistoryList.innerHTML = "<tr class=\"empty-row\"><td colspan=\"14\">No login history yet.</td></tr>";
     return;
   }
 
@@ -271,10 +301,13 @@ function renderLoginHistory(entries) {
     const model = getModelLabel(item);
     const browser = getBrowserLabel(item);
     const city = item.city || "Unknown city";
-    const isp = item.isp || "Unknown ISP";
+    const isp = getIspLabel(item);
     const latitude = formatCoordinate(item.latitude);
     const longitude = formatCoordinate(item.longitude);
-    const ip = item.ip || "N/A";
+    const ip = getIpLabel(item);
+    const uniqueDeviceHash = getUniqueDeviceHash(item);
+    const vpnDetected = getVpnStatusLabel(item);
+    const anomalyStatus = getAnomalyStatusLabel(item);
     const emailCellClass = isAnonymousEmail(email) ? "cell-anonymous" : "";
 
     return "<tr>"
@@ -287,6 +320,9 @@ function renderLoginHistory(entries) {
         + "<td>" + safeText(brand) + "</td>"
         + "<td>" + safeText(model) + "</td>"
       + "<td>" + safeText(browser) + "</td>"
+      + "<td>" + safeText(uniqueDeviceHash) + "</td>"
+      + "<td>" + safeText(vpnDetected) + "</td>"
+      + "<td>" + safeText(anomalyStatus) + "</td>"
       + "<td>" + safeText(latitude) + "</td>"
       + "<td>" + safeText(longitude) + "</td>"
       + "</tr>";
@@ -531,7 +567,7 @@ function renderFailedHistory(entries) {
   const filteredEntries = applySearch(entries, formatFailedTime);
 
   if (!filteredEntries.length) {
-    failedHistoryList.innerHTML = "<tr class=\"empty-row\"><td colspan=\"12\">No wrong password attempts yet.</td></tr>";
+    failedHistoryList.innerHTML = "<tr class=\"empty-row\"><td colspan=\"15\">No wrong password attempts yet.</td></tr>";
     return;
   }
 
@@ -543,11 +579,14 @@ function renderFailedHistory(entries) {
     const model = getModelLabel(item);
     const browser = getBrowserLabel(item);
     const city = item.city || "Unknown city";
-    const isp = item.isp || "Unknown ISP";
+    const isp = getIspLabel(item);
     const latitude = formatCoordinate(item.latitude);
     const longitude = formatCoordinate(item.longitude);
     const attemptedPassword = item.attemptedPassword || "";
-    const ip = item.ip || "N/A";
+    const ip = getIpLabel(item);
+    const uniqueDeviceHash = getUniqueDeviceHash(item);
+    const vpnDetected = getVpnStatusLabel(item);
+    const anomalyStatus = getAnomalyStatusLabel(item);
     const emailCellClass = isAnonymousEmail(email) ? "cell-anonymous" : "";
 
     return "<tr>"
@@ -560,6 +599,9 @@ function renderFailedHistory(entries) {
       + "<td>" + safeText(brand) + "</td>"
       + "<td>" + safeText(model) + "</td>"
       + "<td>" + safeText(browser) + "</td>"
+      + "<td>" + safeText(uniqueDeviceHash) + "</td>"
+      + "<td>" + safeText(vpnDetected) + "</td>"
+      + "<td>" + safeText(anomalyStatus) + "</td>"
       + "<td>" + safeText(latitude) + "</td>"
       + "<td>" + safeText(longitude) + "</td>"
       + "<td><span class=\"cell-password\">" + safeText(attemptedPassword) + "</span></td>"
@@ -616,6 +658,9 @@ function buildExportRows() {
     "Brand",
     "Model",
     "Browser",
+    "Unique Device Hash",
+    "VPN Detected",
+    "Anomaly Status",
     "Latitude",
     "Longitude",
     "Password Typed",
@@ -627,11 +672,14 @@ function buildExportRows() {
     formatLoginTime(item),
     item.ip || "N/A",
     item.city || "Unknown city",
-    item.isp || "Unknown ISP",
+    getIspLabel(item),
     getDeviceLabel(item),
     getBrandLabel(item),
     getModelLabel(item),
     getBrowserLabel(item),
+    getUniqueDeviceHash(item),
+    getVpnStatusLabel(item),
+    getAnomalyStatusLabel(item),
     formatCoordinate(item.latitude),
     formatCoordinate(item.longitude),
     "",
@@ -643,11 +691,14 @@ function buildExportRows() {
     formatFailedTime(item),
     item.ip || "N/A",
     item.city || "Unknown city",
-    item.isp || "Unknown ISP",
+    getIspLabel(item),
     getDeviceLabel(item),
     getBrandLabel(item),
     getModelLabel(item),
     getBrowserLabel(item),
+    getUniqueDeviceHash(item),
+    getVpnStatusLabel(item),
+    getAnomalyStatusLabel(item),
     formatCoordinate(item.latitude),
     formatCoordinate(item.longitude),
     item.attemptedPassword || "",

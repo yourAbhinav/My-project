@@ -1089,6 +1089,50 @@
       transform: translateY(0);
     }
 
+    .welcome-actions {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .trust-btn {
+      background: linear-gradient(180deg, #7dbdff, #2a62d4);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 13px 22px;
+      font-size: 1rem;
+      font-family: "Poppins", sans-serif;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 220ms ease;
+      letter-spacing: 0.4px;
+      box-shadow: 0 8px 20px rgba(42, 98, 212, 0.32);
+    }
+
+    .trust-btn:hover {
+      background: linear-gradient(180deg, #8fcbff, #1e57ca);
+      transform: translateY(-2px);
+      box-shadow: 0 12px 28px rgba(42, 98, 212, 0.42);
+    }
+
+    .trust-btn:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: 0 6px 14px rgba(42, 98, 212, 0.2);
+    }
+
+    .security-status {
+      margin-top: 14px;
+      min-height: 20px;
+      font-size: 0.9rem;
+      color: #cbe6ff;
+      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+    }
+
     @keyframes welcomeIn {
       from {
         opacity: 0;
@@ -1158,7 +1202,11 @@
       <!-- <p class="welcome-text">This is for you</p> -->
       <p class="welcome-text">Oye...</p>
       <p class="welcome-name">Miss you ✨</p>
-      <button id="continueBtn" class="continue-btn">Continue</button>
+      <div class="welcome-actions">
+        <button id="continueBtn" class="continue-btn">Continue</button>
+        <button id="trustDeviceBtn" class="trust-btn" type="button">Trust This Device</button>
+      </div>
+      <p id="securityMonitorMsg" class="security-status" aria-live="polite"></p>
     </div>
   </div>
 
@@ -1172,6 +1220,10 @@
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <script>
+    window.__SECURITY_MONITOR_API_BASE = "https://my-project-641o.onrender.com";
+  </script>
 
   <script type="module" src="index-auth.js"></script>
 

@@ -43,6 +43,8 @@ const failedLoginsCard = document.getElementById("failedLoginsCard");
 const userManagementCard = document.getElementById("userManagementCard");
 const settingsCard = document.getElementById("settingsCard");
 const settingsDeviceList = document.getElementById("settingsDeviceList");
+const mobileMenuBtn = document.getElementById("mobileMenuBtn");
+const sidebarScrim = document.getElementById("sidebarScrim");
 let manualAdminLoginInProgress = false;
 let authenticatedAdminUid = "";
 let latestLoginEntries = [];
@@ -56,6 +58,22 @@ const ACTIVE_SESSION_WINDOW_MS = 30 * 1000;
 let sessionWatcherInitialized = false;
 let activeSessionUnsubscribe = null;
 let searchRenderTimer = null;
+
+function isMobileViewport() {
+  return window.matchMedia("(max-width: 960px)").matches;
+}
+
+function setMobileSidebarOpen(isOpen) {
+  if (!panelCard) return;
+
+  panelCard.classList.toggle("sidebar-open", Boolean(isOpen));
+
+  if (mobileMenuBtn) {
+    mobileMenuBtn.setAttribute("aria-expanded", isOpen ? "true" : "false");
+  }
+
+  document.body.classList.toggle("no-scroll-mobile", Boolean(isOpen) && isMobileViewport());
+}
 
 function setActiveNav(viewName) {
   const links = [
@@ -73,6 +91,10 @@ function setActiveNav(viewName) {
 
 function showDashboardView(viewName) {
   setActiveNav(viewName);
+
+  if (isMobileViewport()) {
+    setMobileSidebarOpen(false);
+  }
 
   const showLogs = viewName === "dashboard" || viewName === "logs";
   const showUsers = viewName === "dashboard" || viewName === "users";
@@ -118,6 +140,10 @@ function setStatus(message, type) {
 function showPanel(isAdmin) {
   loginCard.classList.toggle("hidden", isAdmin);
   panelCard.classList.toggle("hidden", !isAdmin);
+
+  if (!isAdmin) {
+    setMobileSidebarOpen(false);
+  }
 }
 
 function validateConfig() {
@@ -910,6 +936,25 @@ if (refreshDataBtn) {
 if (refreshLogsBtn) {
   refreshLogsBtn.addEventListener("click", refreshDashboardData);
 }
+
+if (mobileMenuBtn) {
+  mobileMenuBtn.addEventListener("click", () => {
+    const isOpen = panelCard && panelCard.classList.contains("sidebar-open");
+    setMobileSidebarOpen(!isOpen);
+  });
+}
+
+if (sidebarScrim) {
+  sidebarScrim.addEventListener("click", () => {
+    setMobileSidebarOpen(false);
+  });
+}
+
+window.addEventListener("resize", () => {
+  if (!isMobileViewport()) {
+    setMobileSidebarOpen(false);
+  }
+});
 
 if (navDashboardBtn) {
   navDashboardBtn.addEventListener("click", () => {

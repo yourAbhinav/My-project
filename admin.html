@@ -232,6 +232,28 @@
       isolation: isolate;
     }
 
+    .mobile-menu-btn {
+      display: none;
+      position: fixed;
+      top: 14px;
+      left: 14px;
+      z-index: 30;
+      width: 42px;
+      height: 42px;
+      border-radius: 10px;
+      border: 1px solid rgba(0, 217, 255, 0.35);
+      background: rgba(10, 14, 39, 0.9);
+      color: var(--neon-cyan);
+      font-size: 1.2rem;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 0 16px rgba(0, 217, 255, 0.24);
+    }
+
+    .sidebar-scrim {
+      display: none;
+    }
+
     .dashboard::before {
       content: "";
       position: absolute;
@@ -725,8 +747,18 @@
     }
 
     @media (max-width: 960px) {
+      body.no-scroll-mobile {
+        overflow: hidden;
+      }
+
       .dashboard {
         grid-template-columns: 1fr;
+        overflow-x: clip;
+      }
+
+      .mobile-menu-btn {
+        display: inline-grid;
+        place-items: center;
       }
 
       .neon-streams {
@@ -734,13 +766,41 @@
       }
 
       .sidebar {
-        padding: 12px;
-        border-right: none;
-        border-bottom: 1px solid rgba(0, 217, 255, 0.12);
-        position: sticky;
+        position: fixed;
         top: 0;
-        z-index: 14;
-        backdrop-filter: blur(8px);
+        left: 0;
+        bottom: 0;
+        z-index: 40;
+        width: min(84vw, 320px);
+        padding: 18px 14px 16px;
+        border-right: 1px solid rgba(0, 217, 255, 0.2);
+        border-bottom: none;
+        backdrop-filter: blur(14px);
+        transform: translateX(-105%);
+        transition: transform var(--anim-mid) var(--ease-smooth);
+      }
+
+      .dashboard.sidebar-open .sidebar {
+        transform: translateX(0);
+      }
+
+      .sidebar-scrim {
+        display: block;
+        position: fixed;
+        inset: 0;
+        z-index: 35;
+        border: none;
+        margin: 0;
+        padding: 0;
+        background: rgba(2, 5, 14, 0.58);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity var(--anim-mid) var(--ease-smooth);
+      }
+
+      .dashboard.sidebar-open .sidebar-scrim {
+        opacity: 1;
+        pointer-events: auto;
       }
 
       .brand {
@@ -748,52 +808,114 @@
       }
 
       .nav {
-        display: flex;
+        display: grid;
         gap: 8px;
-        overflow-x: auto;
-        padding-bottom: 2px;
       }
 
       .nav-item {
-        flex: 0 0 auto;
+        width: 100%;
       }
 
       .sidebar-bottom {
         margin-top: 10px;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: 1fr;
       }
 
       .topbar {
         flex-direction: column;
         align-items: flex-start;
-        padding: 16px;
+        padding: 14px 14px 12px 64px;
         backdrop-filter: none;
       }
 
       .toolbar {
         width: 100%;
         justify-content: flex-start;
+        gap: 8px;
       }
 
       .search {
-        min-width: min(100%, 300px);
+        width: 100%;
+        min-width: 0;
+      }
+
+      .btn-refresh,
+      .btn-csv {
+        flex: 1 1 calc(50% - 6px);
+        min-width: 0;
+        padding-inline: 12px;
+      }
+
+      .status-inline {
+        margin-top: 2px;
       }
 
       .content {
-        padding: 16px;
-        gap: 16px;
+        padding: 12px 10px 0;
+        gap: 12px;
       }
 
       .table-card {
         backdrop-filter: none;
+        border-radius: 12px;
       }
 
       .table-wrap {
-        max-height: 360px;
+        max-height: none;
       }
 
       .title-block h1 {
         font-size: 1.3rem;
+      }
+
+      .card-head,
+      .card-head.with-actions,
+      .table-card.management .card-head {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      th,
+      td {
+        padding: 10px 10px;
+      }
+
+      table {
+        min-width: 680px;
+      }
+
+      .footer {
+        padding: 14px 12px 18px;
+      }
+    }
+
+    @media (max-width: 520px) {
+      .login-wrap {
+        padding: 14px;
+      }
+
+      .login-card {
+        padding: 22px 16px;
+      }
+
+      .topbar {
+        padding-right: 10px;
+      }
+
+      .toolbar {
+        display: grid;
+        grid-template-columns: 1fr;
+      }
+
+      .btn-refresh,
+      .btn-csv,
+      .btn-refresh-mini,
+      .btn-danger {
+        width: 100%;
+      }
+
+      .card-head-actions {
+        width: 100%;
       }
     }
 
@@ -836,7 +958,9 @@
   </section>
 
   <section class="dashboard hidden" id="panelCard">
-    <aside class="sidebar">
+    <button id="mobileMenuBtn" class="mobile-menu-btn" type="button" aria-label="Open navigation" aria-controls="sidebarNav" aria-expanded="false">☰</button>
+
+    <aside class="sidebar" id="sidebarNav">
       <div class="brand">◆ SECURITY HUB</div>
       <nav class="nav" aria-label="Sidebar navigation">
         <button id="navDashboardBtn" class="nav-item" type="button">Dashboard</button>
@@ -851,6 +975,8 @@
         <button id="logoutBtn" class="btn-logout" type="button">Logout</button>
       </div>
     </aside>
+
+    <button id="sidebarScrim" class="sidebar-scrim" type="button" aria-label="Close navigation"></button>
 
     <div class="neon-streams" id="neonStreamsContainer">
       <!-- Animated neon data streams will be generated here -->

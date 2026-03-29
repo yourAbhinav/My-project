@@ -10,6 +10,9 @@ const {
   FRONTEND_URL = "",
   ALLOWED_ORIGINS = "",
   DEVICE_COOKIE_SECRET = "",
+  COOKIE_SAME_SITE = "none",
+  COOKIE_SECURE = "true",
+  COOKIE_MAX_AGE_DAYS = "30",
   FIREBASE_PROJECT_ID = "",
   FIREBASE_CLIENT_EMAIL = "",
   FIREBASE_PRIVATE_KEY = "",
@@ -60,6 +63,31 @@ app.use(
 );
 app.use(express.json({ limit: "1mb" }));
 app.use(cookieParser());
+
+function getCookieSameSiteValue() {
+  const normalized = String(COOKIE_SAME_SITE || "none").trim().toLowerCase();
+  if (normalized === "strict") return "strict";
+  if (normalized === "lax") return "lax";
+  return "none";
+}
+
+function getCookieOptions(includeMaxAge = true) {
+  const maxAgeDays = Number(COOKIE_MAX_AGE_DAYS);
+  const normalizedDays = Number.isFinite(maxAgeDays) && maxAgeDays > 0 ? maxAgeDays : 30;
+  const secure = String(COOKIE_SECURE).trim().toLowerCase() !== "false";
+  const options = {
+    httpOnly: true,
+    secure,
+    sameSite: getCookieSameSiteValue(),
+    path: "/",
+  };
+
+  if (includeMaxAge) {
+    options.maxAge = Math.floor(normalizedDays * 24 * 60 * 60 * 1000);
+  }
+
+  return options;
+}
 
 function getClientIp(req) {
   const forwarded = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim();
@@ -300,13 +328,7 @@ app.post("/api/security/session/start", verifyFirebaseUser, async (req, res) => 
   }
 
   const signedToken = createSignedDeviceToken(uid, uniqueDeviceHash);
-  res.cookie("device_session", signedToken, {
-    httpOnly: true,
-    secure: true,
-    sameSite: "strict",
-    maxAge: 1000 * 60 * 60 * 24 * 30,
-    path: "/",
-  });
+  res.cookie("device_session", signedToken, getCookieOptions(true));
 
   res.json({
     ok: true,
@@ -345,6 +367,11 @@ app.post("/api/security/device/trust", verifyFirebaseUser, async (req, res) => {
   );
 
   res.json({ ok: true, trusted: true, uniqueDeviceHash: resolvedHash });
+});
+
+app.post("/api/security/session/end", verifyFirebaseUser, (_req, res) => {
+  res.clearCookie("device_session", getCookieOptions(false));
+  res.json({ ok: true, cleared: true });
 });
 
 app.listen(Number(PORT), () => {

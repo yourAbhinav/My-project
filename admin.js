@@ -7,7 +7,6 @@ import {
   collection,
   deleteDoc,
   doc,
-  getDocs,
   limit,
   onSnapshot,
   orderBy,
@@ -57,7 +56,20 @@ const ACTIVE_SESSIONS_COLLECTION = "activeSessions";
 const ACTIVE_SESSION_WINDOW_MS = 30 * 1000;
 let sessionWatcherInitialized = false;
 let activeSessionUnsubscribe = null;
+let loginHistoryUnsubscribe = null;
+let failedHistoryUnsubscribe = null;
 let searchRenderTimer = null;
+let loginHistoryHtmlCache = "";
+let failedHistoryHtmlCache = "";
+let userManagementHtmlCache = "";
+let settingsHtmlCache = "";
+
+function resetRenderCaches() {
+  loginHistoryHtmlCache = "";
+  failedHistoryHtmlCache = "";
+  userManagementHtmlCache = "";
+  settingsHtmlCache = "";
+}
 
 function isMobileViewport() {
   return window.matchMedia("(max-width: 960px)").matches;
@@ -313,46 +325,50 @@ function renderLoginHistory(entries) {
   if (!loginHistoryList) return;
 
   const filteredEntries = applySearch(entries, formatLoginTime);
+  let html = "";
 
   if (!filteredEntries.length) {
-    loginHistoryList.innerHTML = "<tr class=\"empty-row\"><td colspan=\"14\">No login history yet.</td></tr>";
-    return;
+    html = "<tr class=\"empty-row\"><td colspan=\"14\">No login history yet.</td></tr>";
+  } else {
+    html = filteredEntries.map((item) => {
+      const email = item.email || "Unknown user";
+      const loginTime = formatLoginTime(item);
+      const device = getDeviceLabel(item);
+      const brand = getBrandLabel(item);
+      const model = getModelLabel(item);
+      const browser = getBrowserLabel(item);
+      const city = item.city || "Unknown city";
+      const isp = getIspLabel(item);
+      const latitude = formatCoordinate(item.latitude);
+      const longitude = formatCoordinate(item.longitude);
+      const ip = getIpLabel(item);
+      const uniqueDeviceHash = getUniqueDeviceHash(item);
+      const vpnDetected = getVpnStatusLabel(item);
+      const anomalyStatus = getAnomalyStatusLabel(item);
+      const emailCellClass = isAnonymousEmail(email) ? "cell-anonymous" : "";
+
+      return "<tr>"
+        + "<td class=\"" + emailCellClass + "\">" + safeText(email) + "</td>"
+        + "<td>" + safeText(loginTime) + "</td>"
+        + "<td>" + safeText(ip) + "</td>"
+        + "<td>" + safeText(city) + "</td>"
+        + "<td>" + safeText(isp) + "</td>"
+        + "<td>" + safeText(device) + "</td>"
+          + "<td>" + safeText(brand) + "</td>"
+          + "<td>" + safeText(model) + "</td>"
+        + "<td>" + safeText(browser) + "</td>"
+        + "<td>" + safeText(uniqueDeviceHash) + "</td>"
+        + "<td>" + safeText(vpnDetected) + "</td>"
+        + "<td>" + safeText(anomalyStatus) + "</td>"
+        + "<td>" + safeText(latitude) + "</td>"
+        + "<td>" + safeText(longitude) + "</td>"
+        + "</tr>";
+    }).join("");
   }
 
-  loginHistoryList.innerHTML = filteredEntries.map((item) => {
-    const email = item.email || "Unknown user";
-    const loginTime = formatLoginTime(item);
-    const device = getDeviceLabel(item);
-    const brand = getBrandLabel(item);
-    const model = getModelLabel(item);
-    const browser = getBrowserLabel(item);
-    const city = item.city || "Unknown city";
-    const isp = getIspLabel(item);
-    const latitude = formatCoordinate(item.latitude);
-    const longitude = formatCoordinate(item.longitude);
-    const ip = getIpLabel(item);
-    const uniqueDeviceHash = getUniqueDeviceHash(item);
-    const vpnDetected = getVpnStatusLabel(item);
-    const anomalyStatus = getAnomalyStatusLabel(item);
-    const emailCellClass = isAnonymousEmail(email) ? "cell-anonymous" : "";
-
-    return "<tr>"
-      + "<td class=\"" + emailCellClass + "\">" + safeText(email) + "</td>"
-      + "<td>" + safeText(loginTime) + "</td>"
-      + "<td>" + safeText(ip) + "</td>"
-      + "<td>" + safeText(city) + "</td>"
-      + "<td>" + safeText(isp) + "</td>"
-      + "<td>" + safeText(device) + "</td>"
-        + "<td>" + safeText(brand) + "</td>"
-        + "<td>" + safeText(model) + "</td>"
-      + "<td>" + safeText(browser) + "</td>"
-      + "<td>" + safeText(uniqueDeviceHash) + "</td>"
-      + "<td>" + safeText(vpnDetected) + "</td>"
-      + "<td>" + safeText(anomalyStatus) + "</td>"
-      + "<td>" + safeText(latitude) + "</td>"
-      + "<td>" + safeText(longitude) + "</td>"
-      + "</tr>";
-  }).join("");
+  if (html === loginHistoryHtmlCache) return;
+  loginHistoryHtmlCache = html;
+  loginHistoryList.innerHTML = html;
 }
 
 function formatFailedTime(data) {
@@ -537,102 +553,110 @@ function renderUserManagement() {
   if (!userManagementList) return;
 
   const rows = deriveUserManagementRows();
+  let html = "";
   if (!rows.length) {
-    userManagementList.innerHTML = "<tr class=\"empty-row\"><td colspan=\"6\">No users found from current logs and active sessions.</td></tr>";
-    return;
+    html = "<tr class=\"empty-row\"><td colspan=\"6\">No users found from current logs and active sessions.</td></tr>";
+  } else {
+    const canForceLogoutUser = (email) => {
+      const normalized = (email || "").trim().toLowerCase();
+      if (!normalized) return false;
+      if (normalized === "unknown user" || normalized === "anonymous") return false;
+      if (normalized === ADMIN_EMAIL.toLowerCase()) return false;
+      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized);
+    };
+
+    html = rows.map((row) => {
+      const successLabel = row.lastSuccess ? row.lastSuccess.label : "No successful login";
+      const failedLabel = row.lastFailed ? row.lastFailed.label : "No failed attempt";
+      const activeCount = row.activeSessions.length;
+      const statusClass = activeCount > 0 ? "user-chip" : "user-chip inactive";
+      const statusText = activeCount > 0 ? "Live" : "Offline";
+      const deviceDetails = activeCount > 0
+        ? row.activeSessions.map((session) => {
+          const details = [
+            getDeviceLabel(session),
+            getBrandLabel(session),
+            getModelLabel(session),
+            getBrowserLabel(session),
+            session.city || "Unknown city",
+            session.ip ? "IP " + session.ip : "IP N/A",
+            "Seen " + formatSessionSeen(session),
+          ];
+
+          return "<div>" + safeText(details.join(" | ")) + "</div>";
+        }).join("")
+        : "<span class=\"user-chip inactive\">No active devices</span>";
+      const allowForceLogout = canForceLogoutUser(row.email);
+      const actionButton = allowForceLogout
+        ? "<button class=\"btn-danger js-force-user-logout\" type=\"button\" data-email=\"" + safeText(row.email) + "\">Force Logout</button>"
+        : "<span class=\"user-chip inactive\">Unavailable</span>";
+
+      return "<tr>"
+        + "<td>" + safeText(row.email) + "</td>"
+        + "<td><span class=\"" + statusClass + "\">" + safeText(String(activeCount)) + " device(s)</span></td>"
+        + "<td>" + deviceDetails + "</td>"
+        + "<td>" + safeText(successLabel) + "</td>"
+        + "<td>" + safeText(failedLabel) + "</td>"
+        + "<td><span class=\"" + statusClass + "\">" + safeText(statusText) + "</span><br>" + actionButton + "</td>"
+        + "</tr>";
+    }).join("");
   }
 
-  const canForceLogoutUser = (email) => {
-    const normalized = (email || "").trim().toLowerCase();
-    if (!normalized) return false;
-    if (normalized === "unknown user" || normalized === "anonymous") return false;
-    if (normalized === ADMIN_EMAIL.toLowerCase()) return false;
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized);
-  };
-
-  userManagementList.innerHTML = rows.map((row) => {
-    const successLabel = row.lastSuccess ? row.lastSuccess.label : "No successful login";
-    const failedLabel = row.lastFailed ? row.lastFailed.label : "No failed attempt";
-    const activeCount = row.activeSessions.length;
-    const statusClass = activeCount > 0 ? "user-chip" : "user-chip inactive";
-    const statusText = activeCount > 0 ? "Live" : "Offline";
-    const deviceDetails = activeCount > 0
-      ? row.activeSessions.map((session) => {
-        const details = [
-          getDeviceLabel(session),
-          getBrandLabel(session),
-          getModelLabel(session),
-          getBrowserLabel(session),
-          session.city || "Unknown city",
-          session.ip ? "IP " + session.ip : "IP N/A",
-          "Seen " + formatSessionSeen(session),
-        ];
-
-        return "<div>" + safeText(details.join(" | ")) + "</div>";
-      }).join("")
-      : "<span class=\"user-chip inactive\">No active devices</span>";
-    const allowForceLogout = canForceLogoutUser(row.email);
-    const actionButton = allowForceLogout
-      ? "<button class=\"btn-danger js-force-user-logout\" type=\"button\" data-email=\"" + safeText(row.email) + "\">Force Logout</button>"
-      : "<span class=\"user-chip inactive\">Unavailable</span>";
-
-    return "<tr>"
-      + "<td>" + safeText(row.email) + "</td>"
-      + "<td><span class=\"" + statusClass + "\">" + safeText(String(activeCount)) + " device(s)</span></td>"
-      + "<td>" + deviceDetails + "</td>"
-      + "<td>" + safeText(successLabel) + "</td>"
-      + "<td>" + safeText(failedLabel) + "</td>"
-      + "<td><span class=\"" + statusClass + "\">" + safeText(statusText) + "</span><br>" + actionButton + "</td>"
-      + "</tr>";
-  }).join("");
+  if (html === userManagementHtmlCache) return;
+  userManagementHtmlCache = html;
+  userManagementList.innerHTML = html;
 }
 
 function renderFailedHistory(entries) {
   if (!failedHistoryList) return;
 
   const filteredEntries = applySearch(entries, formatFailedTime);
+  let html = "";
 
   if (!filteredEntries.length) {
-    failedHistoryList.innerHTML = "<tr class=\"empty-row\"><td colspan=\"15\">No wrong password attempts yet.</td></tr>";
-    return;
+    html = "<tr class=\"empty-row\"><td colspan=\"15\">No wrong password attempts yet.</td></tr>";
+  } else {
+    html = filteredEntries.map((item) => {
+      const email = item.email || "Unknown user";
+      const failedTime = formatFailedTime(item);
+      const device = getDeviceLabel(item);
+      const brand = getBrandLabel(item);
+      const model = getModelLabel(item);
+      const browser = getBrowserLabel(item);
+      const city = item.city || "Unknown city";
+      const isp = getIspLabel(item);
+      const latitude = formatCoordinate(item.latitude);
+      const longitude = formatCoordinate(item.longitude);
+      const attemptedPassword = item.attemptedPassword || "";
+      const ip = getIpLabel(item);
+      const uniqueDeviceHash = getUniqueDeviceHash(item);
+      const vpnDetected = getVpnStatusLabel(item);
+      const anomalyStatus = getAnomalyStatusLabel(item);
+      const emailCellClass = isAnonymousEmail(email) ? "cell-anonymous" : "";
+
+      return "<tr>"
+        + "<td class=\"" + emailCellClass + "\">" + safeText(email) + "</td>"
+        + "<td>" + safeText(failedTime) + "</td>"
+        + "<td>" + safeText(ip) + "</td>"
+        + "<td>" + safeText(city) + "</td>"
+        + "<td>" + safeText(isp) + "</td>"
+        + "<td>" + safeText(device) + "</td>"
+        + "<td>" + safeText(brand) + "</td>"
+        + "<td>" + safeText(model) + "</td>"
+        + "<td>" + safeText(browser) + "</td>"
+        + "<td>" + safeText(uniqueDeviceHash) + "</td>"
+        + "<td>" + safeText(vpnDetected) + "</td>"
+        + "<td>" + safeText(anomalyStatus) + "</td>"
+        + "<td>" + safeText(latitude) + "</td>"
+        + "<td>" + safeText(longitude) + "</td>"
+        + "<td><span class=\"cell-password\">" + safeText(attemptedPassword) + "</span></td>"
+        + "</tr>";
+    }).join("");
   }
 
-  failedHistoryList.innerHTML = filteredEntries.map((item) => {
-    const email = item.email || "Unknown user";
-    const failedTime = formatFailedTime(item);
-    const device = getDeviceLabel(item);
-    const brand = getBrandLabel(item);
-    const model = getModelLabel(item);
-    const browser = getBrowserLabel(item);
-    const city = item.city || "Unknown city";
-    const isp = getIspLabel(item);
-    const latitude = formatCoordinate(item.latitude);
-    const longitude = formatCoordinate(item.longitude);
-    const attemptedPassword = item.attemptedPassword || "";
-    const ip = getIpLabel(item);
-    const uniqueDeviceHash = getUniqueDeviceHash(item);
-    const vpnDetected = getVpnStatusLabel(item);
-    const anomalyStatus = getAnomalyStatusLabel(item);
-    const emailCellClass = isAnonymousEmail(email) ? "cell-anonymous" : "";
-
-    return "<tr>"
-      + "<td class=\"" + emailCellClass + "\">" + safeText(email) + "</td>"
-      + "<td>" + safeText(failedTime) + "</td>"
-      + "<td>" + safeText(ip) + "</td>"
-      + "<td>" + safeText(city) + "</td>"
-      + "<td>" + safeText(isp) + "</td>"
-      + "<td>" + safeText(device) + "</td>"
-      + "<td>" + safeText(brand) + "</td>"
-      + "<td>" + safeText(model) + "</td>"
-      + "<td>" + safeText(browser) + "</td>"
-      + "<td>" + safeText(uniqueDeviceHash) + "</td>"
-      + "<td>" + safeText(vpnDetected) + "</td>"
-      + "<td>" + safeText(anomalyStatus) + "</td>"
-      + "<td>" + safeText(latitude) + "</td>"
-      + "<td>" + safeText(longitude) + "</td>"
-      + "<td><span class=\"cell-password\">" + safeText(attemptedPassword) + "</span></td>"
-      + "</tr>";
-  }).join("");
+  if (html === failedHistoryHtmlCache) return;
+  failedHistoryHtmlCache = html;
+  failedHistoryList.innerHTML = html;
 }
 
 function renderDeviceSecuritySettings() {
@@ -647,11 +671,14 @@ function renderDeviceSecuritySettings() {
     });
 
   if (!rows.length) {
-    settingsDeviceList.innerHTML = "<tr class=\"empty-row\"><td colspan=\"8\">No active devices found.</td></tr>";
+    const emptyHtml = "<tr class=\"empty-row\"><td colspan=\"8\">No active devices found.</td></tr>";
+    if (emptyHtml === settingsHtmlCache) return;
+    settingsHtmlCache = emptyHtml;
+    settingsDeviceList.innerHTML = emptyHtml;
     return;
   }
 
-  settingsDeviceList.innerHTML = rows.map((item) => {
+  const html = rows.map((item) => {
     const email = normalizeUserEmail(item.email);
     const sessionId = item.sessionId || item.id || "";
     const status = isSessionOnline(item) ? "Live" : "Offline";
@@ -670,6 +697,10 @@ function renderDeviceSecuritySettings() {
       + "<td><button class=\"btn-danger js-secure-remove-device\" type=\"button\" data-session-id=\"" + safeText(sessionId) + "\" data-email=\"" + safeText(email) + "\">Remove Device Data</button></td>"
       + "</tr>";
   }).join("");
+
+  if (html === settingsHtmlCache) return;
+  settingsHtmlCache = html;
+  settingsDeviceList.innerHTML = html;
 }
 
 function buildExportRows() {
@@ -779,6 +810,64 @@ function rerenderTables() {
   renderDeviceSecuritySettings();
 }
 
+function subscribeLoginHistory() {
+  if (loginHistoryUnsubscribe) return;
+
+  if (loginHistoryList) {
+    loginHistoryList.innerHTML = "<tr class=\"empty-row\"><td colspan=\"14\">Loading login history...</td></tr>";
+  }
+
+  const historyQuery = query(
+    collection(db, "siteLoginEvents"),
+    orderBy("loginAt", "desc"),
+    limit(50)
+  );
+
+  loginHistoryUnsubscribe = onSnapshot(
+    historyQuery,
+    (snapshot) => {
+      latestLoginEntries = snapshot.docs.map((snapshotDoc) => snapshotDoc.data());
+      renderLoginHistory(latestLoginEntries);
+      renderUserManagement();
+    },
+    () => {
+      latestLoginEntries = [];
+      loginHistoryHtmlCache = "";
+      renderLoginHistory(latestLoginEntries);
+      setStatus("Could not load login history. Check Firestore rules.", "error");
+    }
+  );
+}
+
+function subscribeFailedHistory() {
+  if (failedHistoryUnsubscribe) return;
+
+  if (failedHistoryList) {
+    failedHistoryList.innerHTML = "<tr class=\"empty-row\"><td colspan=\"15\">Loading failed attempts...</td></tr>";
+  }
+
+  const failedQuery = query(
+    collection(db, "siteFailedLoginEvents"),
+    orderBy("failedAt", "desc"),
+    limit(50)
+  );
+
+  failedHistoryUnsubscribe = onSnapshot(
+    failedQuery,
+    (snapshot) => {
+      latestFailedEntries = snapshot.docs.map((snapshotDoc) => snapshotDoc.data());
+      renderFailedHistory(latestFailedEntries);
+      renderUserManagement();
+    },
+    () => {
+      latestFailedEntries = [];
+      failedHistoryHtmlCache = "";
+      renderFailedHistory(latestFailedEntries);
+      setStatus("Could not load failed attempts. Check Firestore rules.", "error");
+    }
+  );
+}
+
 async function refreshDashboardData() {
   if (refreshDataBtn) refreshDataBtn.disabled = true;
   if (refreshLogsBtn) refreshLogsBtn.disabled = true;
@@ -787,9 +876,10 @@ async function refreshDashboardData() {
   try {
     setStatus("Refreshing data...", "ok");
     subscribeActiveSessions();
-    await Promise.all([loadLoginHistory(), loadFailedHistory()]);
-    renderUserManagement();
-    setStatus("Dashboard refreshed.", "ok");
+    subscribeLoginHistory();
+    subscribeFailedHistory();
+    rerenderTables();
+    setStatus("Dashboard refreshed. Live updates are active.", "ok");
   } finally {
     if (refreshDataBtn) refreshDataBtn.disabled = false;
     if (refreshLogsBtn) refreshLogsBtn.disabled = false;
@@ -871,46 +961,19 @@ function initializeSessionLogoutWatcher() {
   );
 }
 
-async function loadLoginHistory() {
-  if (!loginHistoryList) return;
-
-  loginHistoryList.innerHTML = "<tr class=\"empty-row\"><td colspan=\"11\">Loading login history...</td></tr>";
-
-  try {
-    const historyQuery = query(
-      collection(db, "siteLoginEvents"),
-      orderBy("loginAt", "desc"),
-      limit(50)
-    );
-
-    const snapshot = await getDocs(historyQuery);
-    const items = snapshot.docs.map((doc) => doc.data());
-    latestLoginEntries = items;
-    renderLoginHistory(latestLoginEntries);
-  } catch {
-    loginHistoryList.innerHTML = "<tr class=\"empty-row\"><td colspan=\"11\">Could not load history. Check Firestore rules.</td></tr>";
+function unsubscribeHistoryStreams() {
+  if (loginHistoryUnsubscribe) {
+    loginHistoryUnsubscribe();
+    loginHistoryUnsubscribe = null;
   }
-}
 
-async function loadFailedHistory() {
-  if (!failedHistoryList) return;
-
-  failedHistoryList.innerHTML = "<tr class=\"empty-row\"><td colspan=\"12\">Loading failed attempts...</td></tr>";
-
-  try {
-    const failedQuery = query(
-      collection(db, "siteFailedLoginEvents"),
-      orderBy("failedAt", "desc"),
-      limit(50)
-    );
-
-    const snapshot = await getDocs(failedQuery);
-    const items = snapshot.docs.map((doc) => doc.data());
-    latestFailedEntries = items;
-    renderFailedHistory(latestFailedEntries);
-  } catch {
-    failedHistoryList.innerHTML = "<tr class=\"empty-row\"><td colspan=\"12\">Could not load failed attempts. Check Firestore rules.</td></tr>";
+  if (failedHistoryUnsubscribe) {
+    failedHistoryUnsubscribe();
+    failedHistoryUnsubscribe = null;
   }
+
+  latestLoginEntries = [];
+  latestFailedEntries = [];
 }
 
 if (tableSearch) {
@@ -920,8 +983,9 @@ if (tableSearch) {
     }
 
     searchRenderTimer = window.setTimeout(() => {
-      rerenderTables();
-    }, 120);
+      renderLoginHistory(latestLoginEntries);
+      renderFailedHistory(latestFailedEntries);
+    }, 180);
   });
 }
 
@@ -1134,6 +1198,8 @@ logoutBtn.addEventListener("click", async () => {
   }
 
   authenticatedAdminUid = "";
+  resetRenderCaches();
+  unsubscribeHistoryStreams();
   unsubscribeActiveSessions();
   showPanel(false);
   setStatus(
@@ -1149,6 +1215,8 @@ onAuthStateChanged(auth, async (user) => {
   if (!validateConfig()) {
     manualAdminLoginInProgress = false;
     authenticatedAdminUid = "";
+    resetRenderCaches();
+    unsubscribeHistoryStreams();
     unsubscribeActiveSessions();
     showPanel(false);
     return;
@@ -1157,6 +1225,8 @@ onAuthStateChanged(auth, async (user) => {
   if (!user) {
     manualAdminLoginInProgress = false;
     authenticatedAdminUid = "";
+    resetRenderCaches();
+    unsubscribeHistoryStreams();
     unsubscribeActiveSessions();
     showPanel(false);
     return;
@@ -1165,6 +1235,8 @@ onAuthStateChanged(auth, async (user) => {
   if (!isAdminUser(user)) {
     manualAdminLoginInProgress = false;
     authenticatedAdminUid = "";
+    resetRenderCaches();
+    unsubscribeHistoryStreams();
     unsubscribeActiveSessions();
     await signOut(auth).catch(() => {});
     showPanel(false);
@@ -1179,6 +1251,8 @@ onAuthStateChanged(auth, async (user) => {
   if (authenticatedAdminUid && user.uid && authenticatedAdminUid !== user.uid) {
     manualAdminLoginInProgress = false;
     authenticatedAdminUid = "";
+    resetRenderCaches();
+    unsubscribeHistoryStreams();
     unsubscribeActiveSessions();
     await signOut(auth).catch(() => {});
     showPanel(false);
